@@ -1,17 +1,17 @@
-import findup4
+import findup
 import unittest
 import sqlite3
 
 class TestRepository(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")
-        self.repo = findup4.repository(self.conn)
+        self.repo =  findup.repository(self.conn)
         self.repo.create_schema()
 
     def tearDown(self):
         self.conn.close()
 
-    def test_findBy_duplicate_hash(self):
+    def test_iterateOn_duplicate_hash(self):
         duplicates = [
             #filename                   #size   #hash             #path        #abspath     #realpath
             ('duplicate-a',             1,      'duplicate',      'c:/path1',  'c:/path1',  'c:/path1'), 
@@ -40,7 +40,7 @@ class TestRepository(unittest.TestCase):
         values = [
             (filename, size, hash, path, abspath, realpath) 
             for hash, size, filename, path, abspath, realpath
-            in self.repo.findBy_duplicate_hash()
+            in self.repo.iterateOn_duplicate_hash()
         ]
 
         self.assertEqual(
@@ -53,7 +53,7 @@ class TestRepository(unittest.TestCase):
         for v in values:
             self.assertIn(v, duplicates)
 
-    def test_findBy_unique_hash(self):
+    def test_iterateOn_unique_hash(self):
         duplicates = [
             #filename                   #size   #hash             #path        #abspath     #realpath
             ('duplicate-a',             1,      'duplicate',      'c:/path1',  'c:/path1',  'c:/path1'), 
@@ -82,7 +82,7 @@ class TestRepository(unittest.TestCase):
         values = [
             (filename, size, hash, path, abspath, realpath) 
             for hash, size, filename, path, abspath, realpath 
-            in self.repo.findBy_unique_hash()
+            in self.repo.iterateOn_unique_hash()
         ]
 
 
@@ -140,7 +140,7 @@ class TestRepository(unittest.TestCase):
 class TestFindd(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")
-        self.repo = findup4.repository(self.conn)
+        self.repo =  findup.repository(self.conn)
         self.repo.create_schema()
 
     def tearDown(self):
@@ -188,7 +188,7 @@ class TestFindd(unittest.TestCase):
             d = {filename: hash for filename, size, hash, path, abspath, realpath in duplicates + unique + links}
             return d[fname]
 
-        findd = findup4.Findd(self.repo, get_files=get_files, hash_function=hash_function)
+        findd =  findup.Findd(self.repo, get_files=get_files, hash_function=hash_function)
 
         import logging
         logging.basicConfig(level=logging.DEBUG)
@@ -273,7 +273,7 @@ class TestFindd(unittest.TestCase):
             d = {filename: hash for filename, size, hash, path, abspath, realpath in duplicates + unique}
             return d[fname]
 
-        findd = findup4.Findd(self.repo,get_files=get_files, hash_function=hash_function)
+        findd =  findup.Findd(self.repo,get_files=get_files, hash_function=hash_function)
             
         values = [
             (filename, size, hash, path, abspath, realpath)
