@@ -1,3 +1,5 @@
+from __future__ import print_function #python 2 compatibility
+
 import os
 import hashlib
 import csv
@@ -40,6 +42,7 @@ def _get_size(file_fullname):
     try: return os.path.getsize(file_fullname)	#TODO: Investigate why some files aren't accesible
     except:
         logging.warning("Can't calculate the size of %s", file_fullname)
+        # Returning None to treat this files as unique
         return None
 
 def _md5_checksum(file_path):
@@ -55,6 +58,7 @@ def _md5_checksum(file_path):
         return hash_value
     except:
         logging.warning("Can't calculate the md5 checksum of %s", file_path)
+        # Returning None to treat this files as unique
         return None
 
 @log_time
@@ -262,14 +266,15 @@ class file(object):
         return '%s(%s)' % (type(self).__name__, args_str)
 
 
+
 def pretty_print(results, output_file):
     prev_hash = None
     prev_size = None
 
     for hash, size, filename, path, abspath, realpath in results:
             if prev_hash != hash or prev_size != size:
-                print(hash, size, sep='\t', file=output_file)
-            print('\t%s' % filename, file=output_file)
+                print_function(hash, size, sep='\t', file=output_file)
+            print_function('\t%s' % filename, file=output_file)
             prev_hash = hash
             prev_size = size
 
