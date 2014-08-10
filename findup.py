@@ -1,27 +1,8 @@
-from __future__ import print_function #python 2 compatibility
-
 import os
 import hashlib
-import csv
-import argparse
-import locale
-from datetime import datetime
 import sqlite3
 import logging
-import sys
-
-def log_time(f):
-    def decorator (*args):
-        start_time = datetime.now()
-
-        ret = f(*args)
-
-        end_time = datetime.now()
-        elapsed_time = end_time - start_time
-        logging.info('%s elapsed time: %s', f.__name__, elapsed_time)
-
-        return ret
-    return decorator
+from logtime import log_time
 
 def _get_files(path):
     for root, dirs, files in os.walk(path):
@@ -60,32 +41,6 @@ def _md5_checksum(file_path):
         logging.warning("Can't calculate the md5 checksum of %s", file_path)
         # Returning None to treat this files as unique
         return None
-
-@log_time
-def write_csv(data, csv_filename):
-    with open(csv_filename, "w", encoding=locale.getpreferredencoding()) as csv_file:
-        csv_writer = csv.writer(csv_file,delimiter='\t')
-        for key, file_list in data.items():
-	        for file in file_list:
-                    #TODO: Investigate why the output file has blank lines
-	            csv_writer.writerow([key[0], key[1], file])
-        
-class crc32_adapter():
-    block_size = 32
-
-    def __init__(self):
-        import zlib
-        import base64
-        self.accumulated = b''
-    
-    def update(self, data):
-        if self.accumulated == b'':
-            self.accumulated = zlib.adler32(data)
-        else:
-            self.accumulated = zlib.adler32(data, self.accumulated)
-
-    def hexdigest(self):
-        return str(self.accumulated)
 
 class connection_factory():
     def __init__(self, con_string):
@@ -202,7 +157,7 @@ class Findd():
             hash_value = self.hash_function(bysize_name)
             logging.debug('updating hash %s for file %s', hash_value, bysize_name)
             self.repository.update_file(bysize_name, hash=hash_value)
-            
+
     @log_time
     def scan(self, directory_list):
         for directory in directory_list:
@@ -224,144 +179,3 @@ class Findd():
         for data in search_method():
             yield data
 
-class file(object):
-    """Factory for creating file object types
-
-    Instances of FileType are typically passed as type= arguments to the
-    ArgumentParser add_argument() method.
-
-    Keyword Arguments:
-        - mode -- A string indicating how the file is to be opened. Accepts the
-            same values as the builtin open() function.
-        - bufsize -- The file's desired buffer size. Accepts the same values as
-            the builtin open() function.
-    """
-
-    def __init__(self, mode='w', buffering=-1, encoding='UTF-8'):
-        self._mode = mode
-        self._buffering = buffering
-        self._encoding = encoding
-
-    def __call__(self, string):
-        # the special argument "-" means sys.std{in,out}
-        if string == '-':
-            if 'r' in self._mode:
-                return sys.stdin
-            elif 'w' in self._mode:
-                return sys.stdout
-            else:
-                msg = ('argument "-" with mode %r') % self._mode
-                raise ValueError(msg)
-
-        # all other arguments are used as file names
-        try:
-            return open(string, mode=self._mode, buffering=self._buffering, encoding=self._encoding)
-        except IOError as e:
-            message = _("can't open '%s': %s")
-            raise ArgumentTypeError(message % (string, e))
-
-    def __repr__(self):
-        args = self._mode, self._buffering, self._encoding, self._mode
-        args_str = ', '.join(repr(arg) for arg in args if arg != -1)
-        return '%s(%s)' % (type(self).__name__, args_str)
-
-
-
-def pretty_print(results, output_file):
-    prev_hash = None
-    prev_size = None
-
-    for hash, size, filename, path, abspath, realpath in results:
-            if prev_hash != hash or prev_size != size:
-                print_function(hash, size, sep='\t', file=output_file)
-            print_function('\t%s' % filename, file=output_file)
-            prev_hash = hash
-            prev_size = size
-
-def plain_print(template, results, output_file):
-    from string import Template
-    for row in results:
-        ctx = dict(zip(row.keys(), row))
-        print(Template(template).substitute(ctx))
-
-def exec_command(command, output_file, results):
-    for hash, size, filename, path in results:
-        exec(command)
-
-def exec_script(script, output_file, results, conn, repo):
-    with open(script) as f:
-        command = f.read()
-    exec(command)
-
-def main():
-    args_parser = argparse.ArgumentParser()
-    parser = argparse.ArgumentParser()
-    parser.set_defaults(action='duplicates')
-    parser.add_argument("path", help="Path where to look for duplicates", nargs='+')
-    parser.add_argument("-d", "--database", help="Stores a temporary SQLite database in a file", default=":memory:")
-    parser.add_argument("-lf", "--log-format", help="Logging format", default='%(message)s')
-    parser.add_argument("-l", "--log", help="File to output the log messages")
-#    parser.add_argument("-u", "--unique", help="Find unique files", action="store_const", const='unique', dest='action')
-    parser.add_argument("-u", "--unique", help="Find unique files", action="store_true")
-    parser.add_argument("-o", "--output-file", help="Output file (default: stdout)", default='-', type=file('w', encoding='UTF-8'))
-    g = parser.add_mutually_exclusive_group()
-    g.add_argument(
-        "-t", 
-        "--template", 
-        help="""Output template. Variables ${hash}, ${size}, ${fullname}, ${path}, ${abspath}, ${realpath} 
-             will be replaced with the actual values""", 
-        default="${hash}\t${size}\t${fullname}"
-    )
-    g.add_argument(
-        "-e",
-        "--evaluate",
-        help="""For each result, evaluate the given python code to process the output.
-                Variables hash, size, filename and output_file will be bounded to the appropiate values"""
-    )
-    g.add_argument(
-        "-x",
-        "--execute-script",
-        help="""Executes the given python script to process the results.
-                Variables results and output_file will be bounded to an iterator and the appropiate output stream"""
-    )
-    g.add_argument(
-        "-p",
-        "--pretty-print",
-        action="store_true",
-        help="Groups the results by hash and file size and displays a pretty output"
-    )
-    parser.add_argument(
-        "-v",
-        "--verbosity",
-        help="Verbosity level (default: WARN)",
-        default='WARN',
-        choices=['DEBUG','INFO','WARN','ERROR','CRITICAL'],
-        type=lambda level: level.upper()
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=args.verbosity,
-        format=args.log_format,
-        filename=args.log
-    )
-
-    connection_string = args.database
-    path = args.path
-    action = args.action
-    template = args.template
-
-    with connection_factory(connection_string) as conn, repository(conn) as repo, args.output_file as output_file:
-        findd = Findd(repo)
-#        command = { 'unique': findd.find_unique, 'duplicates': findd.find_duplicates }
-
-#        results = command[action](path)
-        results = findd.find_unique(path) if args.unique else findd.find_duplicates(path)
-
-        if args.execute_script: exec_script(args.execute_script, output_file, results, conn, repo)
-        elif args.evaluate: func = exec_command(args.evaluate, output_file, results)
-        elif args.pretty_print: func = pretty_print(results, output_file)
-        else: plain_print(template, results, output_file)
-
-if '__main__' == __name__:
-    main()
