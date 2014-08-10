@@ -75,7 +75,7 @@ class repository():
     self.connection = None
 
   def create_schema(self):
-    self.connection.execute('create table files(fullname TEXT PRIMARY KEY, size INT, hash CHAR(32), path TEXT, abspath, TEXT, realpath TEXT)')
+    self.connection.execute('create table files(fullname TEXT, size INT, hash CHAR(32), path TEXT, abspath, TEXT, realpath TEXT PRIMARY KEY)')
 
   def add_file(self, name, size, path, abspath, realpath):
     self.connection.execute('insert into files(fullname, size, path, abspath, realpath) values(?,?,?,?,?)', (name, size, path, abspath, realpath))
