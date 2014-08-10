@@ -134,7 +134,6 @@ class repository():
 
   def update_file(self, name, hash):
     self.connection.execute('update files set hash = ? where fullname=?', (hash, name))
-    
 
 class Findd():
   def __init__(self, repository, get_files=_get_files, hash_function=_md5_checksum):
@@ -160,6 +159,10 @@ class Findd():
 
   @log_time
   def scan(self, directory_list):
+    for directory in directory_list:
+      if not os.path.isdir(directory): 
+        raise AssertionError('%s is not a directory' % directory)
+
     for directory in directory_list:
       logging.info('start scan of directory %s', directory)
       self.insert_files(directory)
