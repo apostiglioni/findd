@@ -6,7 +6,7 @@ import sys
 import argparse
 import logging
 
-from findup import connection_factory, repository, Findd
+from dupscanner import connection_factory, repository, DupScanner
 
 class file(object):
   """Factory for creating file object types
@@ -135,11 +135,11 @@ def main():
   template = args.template
 
   with connection_factory(connection_string) as conn, repository(conn) as repo, args.output_file as output_file:
-    findd = Findd(repo)
-#    command = { 'unique': findd.find_unique, 'duplicates': findd.find_duplicates }
+    dupscanner = DupScanner(repo)
+#    command = { 'unique': dupscanner.find_unique, 'duplicates': dupscanner.find_duplicates }
 
 #    results = command[action](path)
-    results = findd.find_unique(path) if args.unique else findd.find_duplicates(path)
+    results = dupscanner.find_unique(path) if args.unique else dupscanner.find_duplicates(path)
 
     if args.execute_script: exec_script(args.execute_script, output_file, results, conn, repo)
     elif args.evaluate: func = exec_command(args.evaluate, output_file, results)

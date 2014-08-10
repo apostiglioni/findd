@@ -1,11 +1,11 @@
-import findup
+import dupscanner
 import unittest
 import sqlite3
 
 class TestRepository(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")
-        self.repo =  findup.repository(self.conn)
+        self.repo =  dupscanner.repository(self.conn)
         self.repo.create_schema()
 
     def tearDown(self):
@@ -137,10 +137,10 @@ class TestRepository(unittest.TestCase):
         for v in values:
             self.assertIn(v, expected)
         
-class TestFindd(unittest.TestCase):
+class TestDupScanner(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")
-        self.repo =  findup.repository(self.conn)
+        self.repo =  dupscanner.repository(self.conn)
         self.repo.create_schema()
 
     def tearDown(self):
@@ -188,7 +188,7 @@ class TestFindd(unittest.TestCase):
             d = {filename: hash for filename, size, hash, path, abspath, realpath in duplicates + unique + links}
             return d[fname]
 
-        findd =  findup.Findd(self.repo, get_files=get_files, hash_function=hash_function)
+        scanner =  dupscanner.DupScanner(self.repo, get_files=get_files, hash_function=hash_function)
 
         import logging
         logging.basicConfig(level=logging.DEBUG)
@@ -196,7 +196,7 @@ class TestFindd(unittest.TestCase):
         values = [
             (filename, size, hash, path, abspath, realpath)
             for hash, size, filename, path, abspath, realpath
-            in findd.find_duplicates([item[3] for item in duplicates + unique + links])
+            in scanner.find_duplicates([item[3] for item in duplicates + unique + links])
         ]
 
         self.assertEqual(
@@ -273,12 +273,12 @@ class TestFindd(unittest.TestCase):
             d = {filename: hash for filename, size, hash, path, abspath, realpath in duplicates + unique}
             return d[fname]
 
-        findd =  findup.Findd(self.repo,get_files=get_files, hash_function=hash_function)
+        scanner =  dupscanner.DupScanner(self.repo,get_files=get_files, hash_function=hash_function)
             
         values = [
             (filename, size, hash, path, abspath, realpath)
             for hash, size, filename, path, abspath, realpath
-            in findd.find_unique(
+            in scanner.find_unique(
                 [item[3] for item in duplicates + unique]
             )
         ]

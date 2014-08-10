@@ -135,7 +135,7 @@ class repository():
   def update_file(self, name, hash):
     self.connection.execute('update files set hash = ? where fullname=?', (hash, name))
 
-class Findd():
+class DupScanner():
   def __init__(self, repository, get_files=_get_files, hash_function=_md5_checksum):
     self.repository = repository
     self.get_files = get_files
