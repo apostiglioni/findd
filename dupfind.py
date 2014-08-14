@@ -76,6 +76,13 @@ def exec_script(script, output_file, results, conn, repo):
     command = f.read()
   exec(command)
 
+
+def run_server(repo):
+  from web import create_server
+  server = create_server(repo)
+  server.run(host='localhost', port=8080, debug=True, reloader=True)
+
+
 def main():
   args_parser = argparse.ArgumentParser()
   parser = argparse.ArgumentParser()
@@ -113,6 +120,12 @@ def main():
     action="store_true",
     help="Groups the results by hash and file size and displays a pretty output"
   )
+  g.add_argument(
+    "-i",
+    "--interactive",
+    action="store_true",
+    help="Interactive mode"
+  )
   parser.add_argument(
     "-v",
     "--verbosity",
@@ -142,6 +155,7 @@ def main():
     results = dupscanner.find_unique(path) if args.unique else dupscanner.find_duplicates(path)
 
     if args.execute_script: exec_script(args.execute_script, output_file, results, conn, repo)
+    elif args.interactive: run_server(repo)
     elif args.evaluate: func = exec_command(args.evaluate, output_file, results)
     elif args.pretty_print: func = pretty_print(results, output_file)
     else: plain_print(template, results, output_file)

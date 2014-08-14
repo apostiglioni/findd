@@ -2,6 +2,8 @@ import dupscanner
 import unittest
 import sqlite3
 
+# TODO: Test that directories are not evaluated
+
 class TestRepository(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")

@@ -20,7 +20,7 @@ def _get_files(path):
       yield (file_fullname, file_size, file_abspath, file_realpath)
 
 def _get_size(file_fullname):
-  try: return os.path.getsize(file_fullname)	#TODO: Investigate why some files aren't accesible
+  try: return os.path.getsize(file_fullname)  # TODO: Investigate why some files aren't accesible
   except:
     logging.warning("Can't calculate the size of %s", file_fullname)
     # Returning None to treat this files as unique
@@ -75,11 +75,55 @@ class repository():
     self.connection = None
 
   def create_schema(self):
-    self.connection.execute('create table files(fullname TEXT PRIMARY KEY, size INT, hash CHAR(32), path TEXT, abspath, TEXT, realpath TEXT)')
+    self.connection.execute('CREATE TABLE files(fullname TEXT PRIMARY KEY, size INT, hash CHAR(32), path TEXT, abspath, TEXT, realpath TEXT)')
+
+  def delete_file(self, path):
+    file_count = 0
+    for fullname, size, hash, path, abspath, realpath \
+    in self.connection.execute(
+     '''SELECT ff.fullname, ff.size, 
+               ff.hash, ff.abspath, 
+               ff.realpath
+        FROM files f, files ff
+        WHERE f.abspath = ?
+        AND ff.hash = f.hash
+        AND ff.size = f.size
+        AND ff.abspath <> f.abspath
+        ''',
+      (path)
+    ):
+      # check real path to prevent counting symlinks pointing to not valid locations
+      if os.path.exists(realpath):
+        file_count+=1
+      else:
+        raise AssertionError('500 Database is inconsistent %s not found in the filesystem' % realpath)
+
+      if file_count > 0:
+        os.remove(abspath)
+      else:
+        raise Exception("409 Can't delete a file without duplicates")
+
+    self.connection.execute('DELETE files WHERE abspath = ?', (path))
 
   def add_file(self, name, size, path, abspath, realpath):
-    self.connection.execute('insert into files(fullname, size, path, abspath, realpath) values(?,?,?,?,?)', (name, size, path, abspath, realpath))
+    self.connection.execute('INSERT INTO files(fullname, size, path, abspath, realpath) VALUES(?,?,?,?,?)', (name, size, path, abspath, realpath))
 
+  def find_clusters(self, page=None, page_size=None):
+    return self.connection.execute('''
+      select hash, size, count(*)
+      from files f
+      group by hash, size
+    ''')
+
+  def findBy_hash_size(self, hash, size):
+    return self.connection.execute('''
+      select fullname, size, hash, path, abspath, realpath
+      from files
+      where hash = ?
+      and size = ?
+      ''',
+      (hash, size)
+    )
 
   def iterateOn_duplicate_hash(self):
     for duplicate in self.connection.execute('''
@@ -95,7 +139,40 @@ class repository():
         )
         order by hash, size, fullname
       '''):
-      yield duplicate
+      return duplicate
+
+  def findBy_duplicate_hash(self):
+    return self.connection.execute('''
+        select hash, size, fullname, path, abspath, realpath
+        from files f
+        where f.realpath = f.abspath 
+        and exists (
+          select 1
+          from files f2
+          where f.size = f2.size and f.hash = f2.hash 
+          group by f2.size, f2.hash
+          having count(*) > 1
+        )
+        order by hash, size, fullname
+      ''')
+
+  def findBy_unique_hash(self):
+    return self.connection.execute('''
+        select hash, size, fullname, path, abspath, realpath
+        from files f
+        where  f.abspath = f.realpath and (
+            f.hash is null or
+            f.size is null or
+            exists (
+            select 1
+            from files f2
+            where f.size = f2.size and f.hash = f2.hash
+            group by size, hash
+            having count(*) = 1
+            )
+        )
+        order by f.hash, f.size
+      ''')
 
   def iterateOn_unique_hash(self):
     for unique in self.connection.execute('''
@@ -114,7 +191,7 @@ class repository():
         )
         order by f.hash, f.size
       '''):
-      yield unique
+      return unique
     
   def findBy_duplicate_size(self):
     return self.connection.execute(
@@ -168,17 +245,20 @@ class DupScanner():
       self.insert_files(directory)
       self.update_checksum()
 
+
+  #TODO: Move these functions to the cli
   @log_time
   def find_duplicates(self, path_list):
-    return self._find(path_list, self.repository.iterateOn_duplicate_hash)
+    return self._find(path_list, self.repository.findBy_duplicate_hash)
 
   @log_time
   def find_unique(self, path_list):
-    return self._find(path_list, self.repository.iterateOn_unique_hash)
+    return self._find(path_list, self.repository.findBy_unique_hash)
 
   def _find(self, path_list, search_method):
     self.scan(path_list)
 
-    for data in search_method():
-      yield data
+    return search_method()
+    #for data in search_method():
+    #  yield data
 
