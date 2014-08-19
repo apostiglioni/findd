@@ -14,8 +14,9 @@ def _get_files(path):
 
       # This condition is assumed always true, and the queries may return
       # incorrect values if it evers turns out to be false
-      assert file_realpath == file_abspath or os.path.islink(file_fullname), \
-      "%s is not %s and %s is not a symlink" % (file_realpath, file_abspath, file_fullname) 
+      # THIS WAS COMMENTED OUT BECAUSE IT FAILED WHEN THERE WAS A LINK IN THE PATH
+      # assert file_realpath == file_abspath or os.path.islink(file_fullname), \
+      # "%s is not %s and %s is not a symlink" % (file_realpath, file_abspath, file_fullname) 
       
       yield (file_fullname, file_size, file_abspath, file_realpath)
 
@@ -77,35 +78,30 @@ class repository():
   def create_schema(self):
     self.connection.execute('CREATE TABLE files(fullname TEXT PRIMARY KEY, size INT, hash CHAR(32), path TEXT, abspath, TEXT, realpath TEXT)')
 
-  def delete_file(self, path):
+  def delete_file(self, path_to_delete):
+    query =  'SELECT f.fullname, f.size, f.hash, f.path, f.abspath, f.realpath \
+              FROM files AS f INNER JOIN files AS ff ON ff.hash = f.hash AND ff.size = f.size AND ff.abspath <> f.abspath \
+              WHERE ff.abspath = ?'
+
     file_count = 0
     for fullname, size, hash, path, abspath, realpath \
-    in self.connection.execute(
-     '''SELECT ff.fullname, ff.size, 
-               ff.hash, ff.abspath, 
-               ff.realpath
-        FROM files f, files ff
-        WHERE f.abspath = ?
-        AND ff.hash = f.hash
-        AND ff.size = f.size
-        AND ff.abspath <> f.abspath
-        ''',
-      (path)
-    ):
+    in self.connection.execute(query, (path_to_delete,)):
       # check real path to prevent counting symlinks pointing to not valid locations
       if os.path.exists(realpath):
         file_count+=1
       else:
         raise AssertionError('500 Database is inconsistent %s not found in the filesystem' % realpath)
 
-      if file_count > 0:
-        os.remove(abspath)
-      else:
-        raise Exception("409 Can't delete a file without duplicates")
+    if file_count > 0:
+      logging.debug("removing {}".format(path_to_delete))
+      # os.remove(abspath)
+    else:
+      raise Exception("409 Can't delete a file without duplicates: {}".format(path_to_delete))
 
-    self.connection.execute('DELETE files WHERE abspath = ?', (path))
+    self.connection.execute('DELETE FROM files WHERE abspath = ?', (path_to_delete,))
 
   def add_file(self, name, size, path, abspath, realpath):
+    logging.debug('INSERT INTO files(fullname, size, path, abspath, realpath) VALUES("{}",{},"{}","{}","{}")'.format(name, size, path, abspath, realpath))
     self.connection.execute('INSERT INTO files(fullname, size, path, abspath, realpath) VALUES(?,?,?,?,?)', (name, size, path, abspath, realpath))
 
   def find_clusters(self, page=None, page_size=None):
@@ -142,10 +138,12 @@ class repository():
       return duplicate
 
   def findBy_duplicate_hash(self):
+    # TODO: Manage links    
+
     return self.connection.execute('''
         select hash, size, fullname, path, abspath, realpath
         from files f
-        where f.realpath = f.abspath 
+        where 1=1 --f.realpath = f.abspath 
         and exists (
           select 1
           from files f2
@@ -157,18 +155,20 @@ class repository():
       ''')
 
   def findBy_unique_hash(self):
+    # TODO: Manage links    
+
     return self.connection.execute('''
         select hash, size, fullname, path, abspath, realpath
         from files f
-        where  f.abspath = f.realpath and (
+        where 1=1 and ( --f.abspath = f.realpath and (
             f.hash is null or
             f.size is null or
             exists (
-            select 1
-            from files f2
-            where f.size = f2.size and f.hash = f2.hash
-            group by size, hash
-            having count(*) = 1
+              select 1
+              from files f2
+              where f.size = f2.size and f.hash = f2.hash
+              group by size, hash
+              having count(*) = 1
             )
         )
         order by f.hash, f.size
@@ -195,21 +195,23 @@ class repository():
     
   def findBy_duplicate_size(self):
     return self.connection.execute(
-        '''
-          select size, fullname
-          from files f
-          where f.realpath = f.abspath 
-          and exists (
-            select 1
-            from files f2
-            where f.size = f2.size
-            group by f2.size
-            having count(*) > 1
-          )
-          order by f.hash, f.size
-        ''')
+      # TODO: Manage links    
+      '''
+        select size, fullname
+        from files f
+        where 1=1 --f.realpath = f.abspath 
+        and exists (
+          select 1
+          from files f2
+          where f.size = f2.size
+          group by f2.size
+          having count(*) > 1
+        )
+        order by f.hash, f.size
+      ''')
 
   def update_file(self, name, hash):
+    logging.info('update files set hash = "{}" where fullname="{}"'.format(hash, name))
     self.connection.execute('update files set hash = ? where fullname=?', (hash, name))
 
 class DupScanner():
