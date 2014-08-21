@@ -2,9 +2,12 @@ import unittest
 import tempfile
 import shutil
 import logging
-from os import path, makedirs, urandom, chmod, symlink
+from os import path, makedirs, urandom, chmod, symlink, remove
+from unittest.mock import patch
 
 from dupscanner import connection_factory, repository, DupScanner
+
+# logging.basicConfig(level='DEBUG')
 
 class DataGenerator():
   _path_prefix = 'dupscanner_test-'
@@ -19,31 +22,31 @@ class DataGenerator():
     assert path.basename(self.root_path).startswith(self._path_prefix)
 
     logging.debug('removing: {}'.format(self.root_path))
-    shutil.rmtree(self.root_path)
+    # shutil.rmtree(self.root_path)
     
     self.files = None
 
   def _mkdirs(self, relative_path):
-    abspath = self._abs(relative_path)
+    abspath = self.abs_path(relative_path)
     if not path.exists(abspath):
       makedirs(abspath)
 
     return path.realpath(abspath)
 
-  def _abs(self, relative_path):
-    return self.root_path + "/" + relative_path
+  def abs_path(self, relative_path):
+    return path.realpath(path.join(self.root_path, relative_path))
 
   def create_file(self, file_path, size=4097, readable=True):
     abs_dirname = self._mkdirs(path.dirname(file_path))
 
-    abs_fullname = abs_dirname + '/' + path.basename(file_path)
+    abs_fullname = path.join(abs_dirname, path.basename(file_path))
     
     assert not path.exists(abs_fullname), 'Test data will overwrite existing file: {}'.format(abs_fullname)
     with open(abs_fullname, 'wb') as f:
       f.write(urandom(size))
     
     if not readable:
-      chmod(abs_fullname, 0200)
+      chmod(abs_fullname, 0o200)
 
     logging.debug("created{}temporary file {}".format(' read only ' if not readable else ' ', abs_fullname))
 
@@ -57,7 +60,7 @@ class DataGenerator():
     abs_dest_fullname = abs_dest_dirname + '/' + dest_basename
 
     assert not path.exists(abs_dest_fullname), 'Test data will overwrite existing file: {}'.format(abs_dest_fullname)
-    generator(self._abs(origin), abs_dest_dirname)
+    generator(self.abs_path(origin), abs_dest_dirname)
 
     logging.debug("{} {} to {}".format(origin, 'linked' if path.islink(abs_dest_fullname) else 'copied', abs_dest_fullname))
 
@@ -73,9 +76,9 @@ class DataGenerator():
     abs_dest_fullname = abs_dest_dirname + '/' + dest_basename
 
     assert not path.exists(abs_dest_fullname), 'Test data will overwrite existing file: {}'.format(abs_dest_fullname)
-    shutil.copy(self._abs(origin), abs_dest_dirname)
+    shutil.copy(self.abs_path(origin), abs_dest_dirname)
 
-    logging.debug("{} linked to {}".format(origin, abs_dest_fullname))
+    logging.debug("{} copied to {}".format(origin, abs_dest_fullname))
 
     self.files.append(abs_dest_fullname)
 
@@ -100,9 +103,10 @@ class DataGenerator():
     abs_dest_fullname = abs_dest_dirname + '/' + dest_basename
 
     assert not path.exists(abs_dest_fullname), 'Test data will overwrite existing file: {}'.format(abs_dest_fullname)
-    symlink(self._abs(origin), abs_dest_dirname)
 
-    logging.debug("{} copied to {}".format(origin, abs_dest_fullname))
+    symlink(self.abs_path(origin), abs_dest_fullname)
+
+    logging.debug("{} linked to {}".format(origin, abs_dest_fullname))
 
     self.files.append(abs_dest_fullname)
 
@@ -110,25 +114,6 @@ class DataGenerator():
 
 
 class TestRepository(unittest.TestCase):
-  # def test_file_links(self):
-  #   with DataGenerator() as test_scenario:      
-  #     uniques_expected = set()
-  #     uniques_expected.add(test_scenario.create_file('1/a.data', size=4097))
-  #     uniques_expected.add(test_scenario.create_file('2/b.data', size=4096))
-  #     uniques_expected.add(test_scenario.create_file('3/c.data', size=512))
-  #     uniques_expected.add(test_scenario.create_file('4/x.data', size=2048, readable=False))
-  #     uniques_expected.add(test_scenario.create_file('4/xx.data', size=2048, readable=False))
-  #     uniques_expected.add(test_scenario.symlink('1/a.data', '2/lnk-a.data'))
-  #     uniques_expected.add(test_scenario.symlink('2/b.data', '1/lnk-b.data'))
-  #     uniques_expected.add(test_scenario.symlink('4/x.data', '4/lnk-x.data'))
-  #     uniques_expected.add(test_scenario.symlink('4/xx.data', '4/lnk-xx.data'))
-      
-  #     connection_string = ':memory:'
-  #     with connection_factory(connection_string) as conn, repository(conn) as repo:
-  #       dupscanner = DupScanner(repo).scan((test_scenario.root_path,))
-
-
-
   def test_happy_path(self):
     with DataGenerator() as test_scenario:
       duplicates_expected  = test_scenario.create_duplicates(('1/a.data', '2/a.data', '3/a.data', '4/a.data'), size=4097) #4096 = block size + 1
@@ -146,7 +131,7 @@ class TestRepository(unittest.TestCase):
       connection_string = ':memory:'
       with connection_factory(connection_string) as conn, repository(conn) as repo:
         dupscanner = DupScanner(repo).scan((test_scenario.root_path,))
-        
+
         duplicates_found = {realpath for hash, size, fullname, path, abspath, realpath in repo.findBy_duplicate_hash()}
 
         duplicates_missing = duplicates_expected - duplicates_found
@@ -166,6 +151,87 @@ class TestRepository(unittest.TestCase):
         assert not uniques_unexpected, 'Unexpected unique elements were found: {}'.format(uniques_unexpected)
 
         assert uniques_expected == uniques_found, 'Expected unique set doesn\'t match found set. \n Expected: {}\n Found: {}'.format(uniques_expected, uniques_found)
+
+  # def test_file_links(self):
+  #   with DataGenerator() as test_scenario: 
+  #     duplicates_expected = set()
+
+  #     uniques_expected = set()
+  #     uniques_expected.add(test_scenario.create_file('1/a.data', size=4097))
+  #     uniques_expected.add(test_scenario.create_file('2/b.data', size=4096))
+  #     uniques_expected.add(test_scenario.create_file('3/c.data', size=512))
+  #     uniques_expected.add(test_scenario.create_file('4/x.data', size=2048, readable=False))
+  #     uniques_expected.add(test_scenario.create_file('4/xx.data', size=2048, readable=False))
+  #     uniques_expected.add(test_scenario.symlink('1/a.data', '2/lnk-a.data'))
+  #     uniques_expected.add(test_scenario.symlink('2/b.data', '1/lnk-b.data'))
+  #     uniques_expected.add(test_scenario.symlink('4/x.data', '4/lnk-x.data'))
+  #     uniques_expected.add(test_scenario.symlink('4/xx.data', '4/lnk-xx.data'))
+      
+  #     connection_string = ':memory:'
+  #     with connection_factory(connection_string) as conn, repository(conn) as repo:
+  #       dupscanner = DupScanner(repo).scan((test_scenario.root_path,))
+
+  #       duplicates_found = {realpath for hash, size, fullname, path, abspath, realpath in repo.findBy_duplicate_hash()}
+
+  #       duplicates_missing = duplicates_expected - duplicates_found
+  #       assert not duplicates_missing, 'Expected duplicate elements were not found: {}'.format(duplicates_missing)
+
+  #       duplicates_unexpected = duplicates_found - duplicates_expected
+  #       assert not duplicates_unexpected, 'Unexpected duplicate elements were found: {}'.format(duplicates_unexpected)
+
+  #       assert duplicates_expected == duplicates_found, 'Expected duplicate set doesn\'t match found set. \n Expected: {}\n Found: {}'.format(duplicates_expected, duplicates_found)
+
+  #       uniques_found = {realpath for hash, size, fullname, path, abspath, realpath in repo.findBy_unique_hash()}
+
+  #       uniques_missing = uniques_expected - uniques_found
+  #       assert not uniques_missing, 'Expected unique elements were not found: {}'.format(uniques_missing)
+
+  #       uniques_unexpected = uniques_found - uniques_expected
+  #       assert not uniques_unexpected, 'Unexpected unique elements were found: {}'.format(uniques_unexpected)
+
+  #       assert uniques_expected == uniques_found, 'Expected unique set doesn\'t match found set. \n Expected: {}\n Found: {}'.format(uniques_expected, uniques_found)
+
+  # def test_delete(self):
+  #   with DataGenerator() as test_scenario:
+  #     duplicates_expected  = test_scenario.create_duplicates(('1/a.data', '2/a.data', '3/a.data', '4/a.data'), size=4097) #4096 = block size + 1      
+
+  #     connection_string = ':memory:'
+  #     with connection_factory(connection_string) as conn, \
+  #          repository(conn) as repo, patch('repository_test.remove') as mock_path:
+  #       dupscanner = DupScanner(repo).scan((test_scenario.root_path,))
+
+  #       f = test_scenario.abs_path('1/a.data')
+  #       repo.delete_file(f)
+  #       mock_path.assert_called_with(f)
+  #       mock_path.reset_mock()
+  #       assert not path.exists(f), '{} should not exist'.format(f)
+
+  #       f = test_scenario.abs_path('2/a.data')
+  #       repo.delete_file(f)
+  #       mock_path.assert_called_with(f)
+  #       mock_path.reset_mock()
+  #       assert not path.exists(f), '{} should not exist'.format(f)
+
+  #       f = test_scenario.abs_path('3/a.data')
+  #       repo.delete_file(f)
+  #       mock_path.assert_called_with(f)
+  #       mock_path.reset_mock()
+  #       assert not path.exists(f), '{} should not exist'.format(f)
+
+  #       try:
+  #         f = test_scenario.abs_path('4/a.data')
+  #         repo.delete_file(f)
+  #         assert False, "Should have raised an exception"
+  #       except Exception as e: 
+  #         f = test_scenario.abs_path('4/a.data')
+  #         expected = Exception("409 Can't delete a file without duplicates: {}".format(f))
+  #         assert expected == e.repr
+  #       else:
+  #         assert False, "Should have raised an exception"
+
+  #       assert not mock_path.called, 'File should have not been deleted'
+  #       mock_path.reset_mock
+
 
 
 # with connection_factory(connection_string) as conn, repository(conn) as repo:
@@ -225,6 +291,8 @@ class TestRepository(unittest.TestCase):
 # escenario por probar: link a un link
 
 # escenario por probar link en un directorio parte del path
+
+# escenario scan devuelve 1 si hay warnings
 
 
 

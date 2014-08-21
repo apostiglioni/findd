@@ -94,7 +94,7 @@ class repository():
 
     if file_count > 0:
       logging.debug("removing {}".format(path_to_delete))
-      # os.remove(abspath)
+      os.remove(abspath)
     else:
       raise Exception("409 Can't delete a file without duplicates: {}".format(path_to_delete))
 
@@ -147,7 +147,9 @@ class repository():
         and exists (
           select 1
           from files f2
-          where f.size = f2.size and f.hash = f2.hash 
+          where f.size = f2.size 
+          and f.hash = f2.hash
+          --and f.realpath <> f2.realpath
           group by f2.size, f2.hash
           having count(*) > 1
         )
