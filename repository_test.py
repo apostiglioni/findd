@@ -165,7 +165,7 @@ class TestRepository(unittest.TestCase):
                 assert duplicates_expected == duplicates_found, \
                     'Expected duplicate set doesn\'t match found set. \n Expected: {}\n Found: {}'.format(duplicates_expected, duplicates_found)
 
-                uniques_found = { abspath for hash, size, fullname, path, abspath in repo.findBy_unique_hash() }
+                uniques_found = {abspath for hash, size, fullname, path, abspath in repo.findBy_unique_hash()}
 
                 uniques_missing = uniques_expected - uniques_found
                 assert not uniques_missing, 'Expected unique elements were not found: {}'.format(
@@ -292,7 +292,14 @@ class TestRepository(unittest.TestCase):
             uniques_expected.add(test_scenario.create_file('1/x.data', size=2048, readable=False))
             uniques_expected.add(test_scenario.create_file('1/xx.data', size=2048, readable=False))
 
+            # TODO: This behavior is not consistent with don't follow links
             test_scenario.symlink('1/', 'links/1')
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/a.data'))
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/b.data'))
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/c.data'))
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/e.data'))
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/x.data'))
+            uniques_expected.add(path.join(test_scenario.root_path, 'links/1/xx.data'))
 
             connection_string = ':memory:'
             with connection_factory(connection_string) as conn, repository(conn) as repo:

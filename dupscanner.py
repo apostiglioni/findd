@@ -150,20 +150,21 @@ class repository():
             (hash, size)
         )
 
-    def iterateOn_duplicate_hash(self):
-        for duplicate in self.connection.execute('''
-        select hash, size, fullname, path, abspath
-        from files f
-        where exists (
-          select 1
-          from files f2
-          where f.size = f2.size and f.hash = f2.hash
-          group by f2.size, f2.hash
-          having count(*) > 1
-        )
-        order by hash, size, fullname
-      '''):
-            return duplicate
+    # def iterateOn_duplicate_hash(self):
+    #     for duplicate in self.connection.execute('''
+    #     select hash, size, fullname, path, abspath
+    #     from files f
+    #     where exists (
+    #       select 1
+    #       from files f2
+    #       where f.size = f2.size and f.hash = f2.hash
+    #       --and f.realpath <> f2.realpath
+    #       group by f2.size, f2.hash
+    #       having count(*) > 1
+    #     )
+    #     order by hash, size, fullname
+    #   '''):
+    #         return duplicate
 
     def findBy_duplicate_hash(self):
         # TODO: Manage links
@@ -176,47 +177,43 @@ class repository():
           from files f2
           where f.size = f2.size 
           and f.hash = f2.hash
-          group by f2.size, f2.hash
-          having count(*) > 1
+          and f.realpath <> f2.realpath
         )
         order by hash, size, fullname
       ''')
 
     def findBy_unique_hash(self):
-        # TODO: Manage links
-
         return self.connection.execute('''
         select hash, size, fullname, path, abspath
         from files f
         where f.hash is null or
               f.size is null or
-              exists (
-                select 1
-                from files f2
-                where f.size = f2.size and f.hash = f2.hash
-                group by size, hash
-                having count(*) = 1
+              not exists (
+                  select 1
+                  from files f2
+                  where f.size = f2.size and f.hash = f2.hash
+                  and f.realpath <> f2.realpath
               )
         order by f.hash, f.size
       ''')
 
-    def iterateOn_unique_hash(self):
-        for unique in self.connection.execute('''
-        select hash, size, fullname, path, abspath
-        from files f
-        where  f.hash is null or
-            f.size is null or
-            exists (
-            select 1
-            from files f2
-            where f.size = f2.size and f.hash = f2.hash
-            group by size, hash
-            having count(*) = 1
-            )
-        )
-        order by f.hash, f.size
-      '''):
-            return unique
+    # def iterateOn_unique_hash(self):
+    #     for unique in self.connection.execute('''
+    #     select hash, size, fullname, path, abspath
+    #     from files f
+    #     where  f.hash is null or
+    #         f.size is null or
+    #         exists (
+    #         select 1
+    #         from files f2
+    #         where f.size = f2.size and f.hash = f2.hash
+    #         group by size, hash
+    #         having count(*) = 1
+    #         )
+    #     )
+    #     order by f.hash, f.size
+    #   '''):
+    #         return unique
 
     def findBy_duplicate_size(self):
         return self.connection.execute(
@@ -226,8 +223,7 @@ class repository():
             '  select 1 '
             '  from files f2 '
             '  where f.size = f2.size '
-            '  group by f2.size '
-            '  having count(*) > 1 '
+            '  and f.realpath <> f2.realpath '
             ') '
             'order by f.hash, f.size'
         )
