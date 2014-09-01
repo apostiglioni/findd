@@ -6,10 +6,11 @@ from logtime import log_time
 
 
 def _get_files(path):
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(path, followlinks=True):
         for name in files:
             file_fullname = os.path.join(root, name)
             file_abspath = os.path.abspath(file_fullname)
+            file_realpath = os.path.realpath(file_fullname)
             file_size = _get_size(file_fullname)
 
             # This condition is assumed always true, and the queries may return
@@ -17,9 +18,8 @@ def _get_files(path):
             # THIS WAS COMMENTED OUT BECAUSE IT FAILED WHEN THERE WAS A LINK IN THE PATH
             # assert file_realpath == file_abspath or os.path.islink(file_fullname), \
             # "%s is not %s and %s is not a symlink" % (file_realpath, file_abspath, file_fullname)
-
             if not os.path.islink(file_fullname):
-                yield (file_fullname, file_size, file_abspath)
+                yield (file_fullname, file_size, file_abspath, file_realpath)
 
 
 def _get_size(file_fullname):
@@ -88,12 +88,20 @@ class repository():
 
     def create_schema(self):
         self.connection.execute(
-            'CREATE TABLE files(fullname TEXT PRIMARY KEY, size INT, hash CHAR(32), path TEXT, abspath, TEXT)')
+            'CREATE TABLE files('
+            '  fullname TEXT PRIMARY KEY, '
+            '  size INT, '
+            '  hash CHAR(32), '
+            '  path TEXT, '
+            '  abspath TEXT, '
+            '  realpath TEXT'
+            ')'
+        )
 
     def delete_file(self, path_to_delete):
         query = 'SELECT f.fullname, f.size, f.hash, f.path, f.abspath \
               FROM files AS f \
-              INNER JOIN files AS ff ON ff.hash = f.hash AND ff.size = f.size AND ff.abspath <> f.abspath \
+              INNER JOIN files AS ff ON ff.hash = f.hash AND ff.size = f.size AND ff.realpath <> f.realpath \
               WHERE ff.abspath = ?'
 
         file_count = 0
@@ -115,28 +123,32 @@ class repository():
 
         self.connection.execute('DELETE FROM files WHERE abspath = ?', (path_to_delete,))
 
-    def add_file(self, name, size, path, abspath):
-        logging.debug('INSERT INTO files(fullname, size, path, abspath) VALUES("{}",{},"{}","{}")'.format(
-            name, size, path, abspath))
+    def add_file(self, name, size, path, abspath, realpath):
+        logging.debug(
+            'INSERT INTO files(fullname, size, path, abspath, realpath) VALUES("{}",{},"{}","{}","{}")'.format(
+                name, size, path, abspath, realpath
+            )
+        )
         self.connection.execute(
-            'INSERT INTO files(fullname, size, path, abspath) VALUES(?,?,?,?)', (name, size, path, abspath))
+            'INSERT INTO files(fullname, size, path, abspath, realpath) VALUES(?,?,?,?,?)',
+            (name, size, path, abspath, realpath)
+        )
 
     def find_clusters(self, page=None, page_size=None):
-        return self.connection.execute('''
-      select hash, size, count(*)
-      from files f
-      group by hash, size
-    ''')
+        return self.connection.execute(
+            'select hash, size, count(*) '
+            'from files f '
+            'group by hash, size, realpath'
+        )
 
     def findBy_hash_size(self, hash, size):
-        return self.connection.execute('''
-      select fullname, size, hash, path, abspath
-      from files
-      where hash = ?
-      and size = ?
-      ''',
-                                       (hash, size)
-                                       )
+        return self.connection.execute(
+            'select fullname, size, hash, path, abspath '
+            'from files '
+            'where hash = ? '
+            'and size = ?',
+            (hash, size)
+        )
 
     def iterateOn_duplicate_hash(self):
         for duplicate in self.connection.execute('''
@@ -145,7 +157,7 @@ class repository():
         where exists (
           select 1
           from files f2
-          where f.size = f2.size and f.hash = f2.hash 
+          where f.size = f2.size and f.hash = f2.hash
           group by f2.size, f2.hash
           having count(*) > 1
         )
@@ -208,19 +220,17 @@ class repository():
 
     def findBy_duplicate_size(self):
         return self.connection.execute(
-            # TODO: Manage links
-            '''
-        select size, fullname
-        from files f
-        where exists (
-          select 1
-          from files f2
-          where f.size = f2.size
-          group by f2.size
-          having count(*) > 1
+            'select size, fullname '
+            'from files f '
+            'where exists ( '
+            '  select 1 '
+            '  from files f2 '
+            '  where f.size = f2.size '
+            '  group by f2.size '
+            '  having count(*) > 1 '
+            ') '
+            'order by f.hash, f.size'
         )
-        order by f.hash, f.size
-      ''')
 
     def update_file(self, name, hash):
         logging.info(
@@ -230,7 +240,6 @@ class repository():
 
 
 class DupScanner():
-
     def __init__(self, repository, get_files=_get_files, hash_function=_md5_checksum):
         self.repository = repository
         self.get_files = get_files
@@ -238,13 +247,12 @@ class DupScanner():
 
     @log_time
     def insert_files(self, path):
-        for file_name, file_size, file_abspath in self.get_files(path):
+        for file_name, file_size, file_abspath, realpath in self.get_files(path):
             logging.debug(
-                'inserting filename %s in path %s with abspath %s and size %s',
-                file_name, path, file_abspath, str(file_size)
+                'inserting filename %s in path %s with abspath %s, realpath %s and size %s',
+                file_name, path, file_abspath, realpath, str(file_size)
             )
-            self.repository.add_file(
-                name=file_name, size=file_size, path=path, abspath=file_abspath)
+            self.repository.add_file(name=file_name, size=file_size, path=path, abspath=file_abspath, realpath=realpath)
 
     @log_time
     def update_checksum(self):
@@ -254,12 +262,38 @@ class DupScanner():
                 'updating hash %s for file %s', hash_value, bysize_name)
             self.repository.update_file(bysize_name, hash=hash_value)
 
+    def _clean_input(self, source_list):
+        def has_subdirs(d, l):
+            for dd in l:
+                if d != dd and dd.startswith(d):
+                    return True
+            return False
+
+        def is_subdir(d, l):
+            for dd in l:
+                if d != dd and d.startswith(dd):
+                    return True
+            return False
+
+        clean_list = []
+        source_list = set(map(lambda x: os.path.join(x, ''), source_list))
+        for directory in source_list:
+            h = has_subdirs(directory, source_list)
+            i = is_subdir(directory, source_list)
+            if (h and not i) or (not h and not i):
+                clean_list.append(directory)
+            else:
+                logging.warning('Ignoring directory: %s', directory)
+
+        return clean_list
+
     @log_time
     def scan(self, directory_list):
         for directory in directory_list:
             if not os.path.isdir(directory):
                 raise AssertionError('%s is not a directory' % directory)
 
+        directory_list = self._clean_input(directory_list)
         for directory in directory_list:
             logging.info('start scan of directory %s', directory)
             self.insert_files(directory)
