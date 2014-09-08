@@ -102,7 +102,10 @@ class Server():
 
     @get('/webapp/<abspath:path>')
     def get_static_app(self, abspath):
-        return bottle.static_file(abspath, root='/Users/macbook/findd/web/app')
+        import os
+        cwd = os.path.dirname(os.path.realpath(__file__))
+
+        return bottle.static_file(abspath, root=os.path.join(cwd, 'app'))
 
 
 def routeapp(server):
