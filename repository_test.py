@@ -371,3 +371,5 @@ class TestRepository(unittest.TestCase):
 
 # escenario scan devuelve 1 si hay warnings
 
+# escenario scan(a, lnk-a) ==> dos directorios, el segundo es un link del primero
+

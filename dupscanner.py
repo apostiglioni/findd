@@ -59,6 +59,7 @@ class connection_factory():
     def __enter__(self):
         self.connection = sqlite3.connect(self.con_str)
         self.connection.row_factory = sqlite3.Row
+        self.connection.text_factory = str  #TODO: Support UNICODE in python 2.X
 
         return self.connection
 
@@ -134,20 +135,29 @@ class repository():
             (name, size, path, abspath, realpath)
         )
 
-    def find_clusters(self, page=None, page_size=None):
+    def find_duplicate_clusters(self, limit=50, offset=0):
         return self.connection.execute(
             'select hash, size, count(*) '
             'from files f '
-            'group by hash, size, realpath'
-        )
+        '''where exists (
+          select 1
+          from files f2
+          where f.size = f2.size
+          and f.hash = f2.hash
+          and f.realpath <> f2.realpath
+        )'''
+            'group by hash, size '
+            'order by count(*) desc ' 
+            'limit ? offset ? '
+        ,(limit, offset) )
 
     def findBy_hash_size(self, hash, size):
         return self.connection.execute(
             'select fullname, size, hash, path, abspath '
             'from files '
-            'where hash = ? '
+            'where hash' + (' = ? ' if hash else ' is NULL ') +
             'and size = ?',
-            (hash, size)
+            (hash, size) if hash else (size,)
         )
 
     # def iterateOn_duplicate_hash(self):

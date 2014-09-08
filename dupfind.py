@@ -54,7 +54,7 @@ def pretty_print(results, output_file):
   prev_hash = None
   prev_size = None
 
-  for hash, size, filename, path, abspath, realpath in results:
+  for hash, size, filename, path, abspath in results:
     if prev_hash != hash or prev_size != size:
       print(hash, size, sep='\t', file=output_file)
     print('\t%s' % filename, file=output_file)
