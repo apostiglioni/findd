@@ -1,13 +1,11 @@
-angular.module('dupfind', ['ui.bootstrap', 'ngResource', 'ngAnimate']);
+angular.module('dupfind', ['ui.bootstrap', 'ui.checkbox', 'ngResource']);
 
 function AccordionDemoCtrl($scope, $resource, $modal, $log) {
   $scope.oneAtATime = true;
 
-  $scope.items = ['Item 1', 'Item 2', 'Item 3'];
-
   $scope.getElements = function() {
     //var Duplicates = $resource('/clusters/duplicates')
-    var Duplicates = $resource('/webapp/duplicates.json')
+    var Duplicates = $resource('/webapp/duplicates-many.json')
     Duplicates.get({
       page: 1,
       page_size: 100
@@ -15,6 +13,10 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
       var clusters = hal._embedded.clusters
       $scope.clusters = clusters
     })
+  }
+
+  $scope.toggleFileSelection = function(cluster, file) {
+    $log.debug('file.selected: ' + file.selected)
   }
 
   $scope.getFiles = function(cluster) {
@@ -56,6 +58,28 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
     }
   }
 
+
+  $scope.selectAll = function(cluster) {
+    var selected = 0;
+    var files = cluster['_embedded']['files'];
+    unselected = []
+    angular.forEach(files, function(file, index) {
+       if(file.selected) {
+         selected++
+       } else {
+         unselected.push(file)
+       }
+    });
+
+    if (selected < files.length - 1) {
+      angular.forEach(unselected, function(file, index) {
+        //leave at least one element unselected
+        if (index > 1) {
+          file.selected = true
+        }
+      });
+    }
+  }
 
   $scope.open = function(cluster) {
     var modalInstance = $modal.open({

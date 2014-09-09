@@ -3,9 +3,13 @@
 <head>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular.js"></script>
     <script src="//code.angularjs.org/1.2.10/angular-resource.min.js"></script>
-    <script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-0.11.0.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular-animate.js"></script>
+    <script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-0.11.0.js"></script>
+    <script src="/webapp/lib/angular-bootstrap-checkbox.js"></script>
     <script src="/webapp/main.js"></script>
+
+    <script src="//code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
 
     <link href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/webapp/styles/main.css"/>
@@ -34,48 +38,47 @@
     </script>
 
     <p>
-        <button class="btn btn-default btn-sm" ng-click="addElement()">Add element</button>
         <button class="btn btn-default btn-sm" ng-click="getElements()">Get element</button>
-        <button class="btn btn-default btn-sm" ng-click="removeElement()">Remove element</button>
-        <button class="btn btn-default btn-sm" ng-click="status.open = !status.open">Toggle last panel</button>
-        <button class="btn btn-default btn-sm" ng-click="status.isFirstDisabled = ! status.isFirstDisabled">Enable /
-            Disable first panel
-        </button>
     </p>
 
-    <label class="checkbox">
-        <input type="checkbox" ng-model="oneAtATime">
-        Open only one at a time
-    </label>
+    <checkbox ng-model="oneAtATime"></checkbox>
+    Open only one at a time
+
+
     <accordion close-others="oneAtATime">
-        <accordion-group ng-repeat="cluster in clusters" class="animate">
+        <accordion-group ng-repeat="cluster in clusters">
             <accordion-heading>
                 <span>{{cluster.hash}}</span><span>{{cluster.size}}</span><span
                     class="pull-right">{{cluster.count}}</span>
             </accordion-heading>
-            <div ng-repeat="file in getFiles(cluster)" class="animate">
-                <div>{{file.abspath}}</div>
                 <div>
-                    <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
-                        <span class="glyphicon glyphicon-trash"></span></button>
+                    <div ng-repeat="file in getFiles(cluster)">
+                        <checkbox
+                            ng-model="file.selected"
+                            ng-change="toggleFileSelection(cluster, file)"
+                        ></checkbox>
+                        <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
+                            <span class="glyphicon glyphicon-pushpin"></span>
+                        </button>
+
+                        <!--<input type="checkbox" ng-checked="file.selected" ng-click="toggleFileSelection(cluster, file, $event)">-->
+                        {{file.abspath}}
+                    </div>
                 </div>
-            </div>
-            <div>
-                <carousel interval="1000">
-                    <slide ng-repeat="file in getFiles(cluster)">
-                        <img ng-src="{{getThumb(file)}}" style="margin:auto;">
 
-                        <div class="carousel-caption">
-                            <h4>Slide {{$index}}</h4>
+                <div>
+                    <button type="button" class="btn btn-default btn-xs" ng-click="selectAll(cluster)">Select</button>
+                    <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">Show</button>
+                    <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="open(cluster)">Delete</button>
+                </div>
 
-                            <p>{{file.fullname}}</p>
-                        </div>
-                    </slide>
-                </carousel>
-            </div>
-            <div>
-                <button type="button" class="btn btn-primary btn-sm" ng-click="open(cluster)">Add Slide</button>
-            </div>
+                <!--
+                <div class="col-xs-1">
+                    <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
+                        <span class="glyphicon glyphicon-trash"></span>
+                    </button>
+                </div>
+                -->
         </accordion-group>
     </accordion>
 </div>
