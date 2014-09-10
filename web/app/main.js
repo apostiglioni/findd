@@ -1,4 +1,4 @@
-angular.module('dupfind', ['ui.bootstrap', 'ui.checkbox', 'ngResource']);
+var app = angular.module('dupfind', ['ui.bootstrap', 'ui.checkbox', 'ngResource'])
 
 function AccordionDemoCtrl($scope, $resource, $modal, $log) {
   $scope.oneAtATime = true;
@@ -15,13 +15,42 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
     })
   }
 
-  $scope.toggleFileSelection = function(cluster, file) {
+  $scope.toggleFileSelection = function(cluster, file, $event) {
     $log.debug('file.selected: ' + file.selected)
+    return false
   }
 
-  $scope.getFiles = function(cluster) {
-    return cluster['_embedded']['files']
+
+  $scope.selectOthers = function(cluster, file) {
+    var files = getFiles(cluster)
+    angular.forEach(files, function(f, idx) {
+      f.selected = f != file
+    })
   }
+
+  $scope.validateFileSelected = function(cluster, file) {
+    //We're trying to unselect, which is always allowed
+    if (file.selected) {
+        return true
+    }
+
+    //If there's more than one unselected, then it's safe to select
+    var unselectedCount = 0
+    var files = getFiles(cluster)
+    for(i=0; i<files.length; i++) {
+      if (!files[i].selected) {
+        unselectedCount++
+      }
+      if (unselectedCount > 1) {
+        return true
+      }
+    }
+
+    //There's no more than one unselected, so we can't select
+    return false
+  }
+
+  $scope.getFiles = getFiles
 
   $scope.getThumb = function(file) {
     return file['_links']['thumb']['href']
@@ -58,6 +87,19 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
     }
   }
 
+  $scope.deleteFromCluster = function(cluster) {
+    var Files = $resource('/webapp/filesss/:abspath')
+
+    angular.forEach(getFiles(cluster), function(file, idx) {
+      if (file.selected) {
+        Files.delete({
+          abspath: file.abspath
+        }, function(hal) {
+          console.log(hal)
+        })
+      }
+    });
+  }
 
   $scope.selectAll = function(cluster) {
     var selected = 0;
@@ -88,7 +130,7 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
       //size: 'lg',
       resolve: {
         files: function() {
-          return $scope.getFiles(cluster);
+          return getFiles(cluster);
         }
       }
     });
@@ -124,3 +166,53 @@ var ModalInstanceCtrl = function($scope, $modalInstance, files) {
     $modalInstance.dismiss('cancel');
   };
 };
+
+/********************************* private functions ********************************/
+  function getFiles(cluster) {
+    return cluster['_embedded']['files']
+  }
+/********************************* private functions ********************************/
+
+
+
+app.directive('dupCheckbox', function () {
+  return {
+    require: ['dupCheckbox', 'ngModel'],
+    controller: 'ButtonsController',
+    link: function (scope, element, attrs, ctrls) {
+      var buttonsCtrl = ctrls[0], ngModelCtrl = ctrls[1];
+
+      function getTrueValue() {
+        return getCheckboxValue(attrs.btnCheckboxTrue, true);
+      }
+
+      function getFalseValue() {
+        return getCheckboxValue(attrs.btnCheckboxFalse, false);
+      }
+
+      function getCheckboxValue(attributeValue, defaultValue) {
+        var val = scope.$eval(attributeValue);
+        return angular.isDefined(val) ? val : defaultValue;
+      }
+
+      function validate() {
+        return !angular.isDefined(attrs.dupCheckboxValidate) || scope.$eval(attrs.dupCheckboxValidate);
+      }
+
+      //model -> UI
+      ngModelCtrl.$render = function () {
+        element.toggleClass(buttonsCtrl.activeClass, angular.equals(ngModelCtrl.$modelValue, getTrueValue()));
+      };
+
+      //ui->model
+      element.bind(buttonsCtrl.toggleEvent, function () {
+        if (validate()) {
+          scope.$apply(function () {
+            ngModelCtrl.$setViewValue(element.hasClass(buttonsCtrl.activeClass) ? getFalseValue() : getTrueValue());
+            ngModelCtrl.$render();
+          });
+        }
+      });
+    }
+  };
+});

@@ -6,7 +6,7 @@ angular.module("ui.checkbox", []).directive("checkbox", function() {
 		require: "ngModel",
 		restrict: "E",
 		replace: "true",
-		template: "<button type=\"button\" ng-style=\"stylebtn\" class=\"btn btn-default\" ng-class=\"{'btn-xs': size==='default', 'btn-sm': size==='large', 'btn-lg': size==='largest'}\">" +
+		template: "<button type=\"button\" ng-style=\"stylebtn\" class=\"btn btn-default\" ng-class=\"{'btn-danger': dangerOnCheck && checked , 'btn-xs': size==='default', 'btn-sm': size==='large', 'btn-lg': size==='largest'}\">" +
 			"<span ng-style=\"styleicon\" class=\"glyphicon\" ng-class=\"{'glyphicon-ok': checked===true}\"></span>" +
 			"</button>",
 		link: function(scope, elem, attrs, modelCtrl) {
@@ -48,6 +48,10 @@ angular.module("ui.checkbox", []).directive("checkbox", function() {
 			if(scope.name !== undefined) {
 				elem.name = scope.name;
 			}
+
+            if (attrs.dangerOnCheck !== undefined) {
+                scope.dangerOnCheck = attrs.dangerOnCheck
+            }
 
 			// Update element when model changes
 			scope.$watch(function() {

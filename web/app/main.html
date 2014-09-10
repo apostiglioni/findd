@@ -53,23 +53,37 @@
             </accordion-heading>
                 <div>
                     <div ng-repeat="file in getFiles(cluster)">
+                        <button type="button" class="btn btn-default btn-xs" ng-click="selectOthers(cluster, file)">
+                            <span class="glyphicon glyphicon-pushpin"></span>
+                        </button>
+                        {{file.selected}}
+                        <button type="button"
+                                class="btn btn-default btn-xs" ng-class="{'btn-danger': file.selected}"
+                                ng-init="file.selected=false"
+                                ng-model="file.selected"
+                                dup-checkbox dup-checkbox-validate="validateFileSelected(cluster, file)"
+                                >
+                            <span ng-style="{'width': '10px', 'left': '-1px'}"
+                                  class="glyphicon"
+                                  ng-class="{'glyphicon-ok': file.selected}">
+                            </span>
+                        </button>
+
+                        <!--
                         <checkbox
                             ng-model="file.selected"
                             ng-change="toggleFileSelection(cluster, file)"
-                        ></checkbox>
-                        <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
-                            <span class="glyphicon glyphicon-pushpin"></span>
-                        </button>
-
+                            danger-on-check="true">
+                        </checkbox>
+                        -->
                         <!--<input type="checkbox" ng-checked="file.selected" ng-click="toggleFileSelection(cluster, file, $event)">-->
                         {{file.abspath}}
                     </div>
                 </div>
 
                 <div>
-                    <button type="button" class="btn btn-default btn-xs" ng-click="selectAll(cluster)">Select</button>
                     <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">Show</button>
-                    <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="open(cluster)">Delete</button>
+                    <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">Delete</button>
                 </div>
 
                 <!--
