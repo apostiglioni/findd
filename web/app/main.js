@@ -1,6 +1,11 @@
-var app = angular.module('dupfind', ['ui.bootstrap', 'ui.checkbox', 'ngResource'])
+var app = angular.module('dupfind', ['ui.bootstrap', 'ngResource'])
 
-function AccordionDemoCtrl($scope, $resource, $modal, $log) {
+app.controller('AlertsController', function($scope, notifications) {
+  $scope.alerts = notifications.queue
+  console.log(notifications.queue)
+})
+
+app.controller('ClustersController', function($scope, $resource, $modal, $log, notifications) {
   $scope.oneAtATime = true;
 
   $scope.getElements = function() {
@@ -15,9 +20,10 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
     })
   }
 
-  $scope.toggleFileSelection = function(cluster, file, $event) {
-    $log.debug('file.selected: ' + file.selected)
-    return false
+  $scope.clearSelection = function(cluster) {
+    angular.forEach(getFiles(cluster), function(file, idx) {
+      file.selected = false
+    })
   }
 
 
@@ -88,17 +94,55 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
   }
 
   $scope.deleteFromCluster = function(cluster) {
-    var Files = $resource('/webapp/filesss/:abspath')
-
-    angular.forEach(getFiles(cluster), function(file, idx) {
+    var toDelete = []
+      angular.forEach(getFiles(cluster), function(file, idx) {
       if (file.selected) {
-        Files.delete({
-          abspath: file.abspath
-        }, function(hal) {
-          console.log(hal)
-        })
+        toDelete.push(file)
+      }
+    })
+    if (toDelete.length < 1) return
+
+    var modalInstance = $modal.open({
+      templateUrl: 'confirmDeleteDialog.html',
+      controller: ConfirmDeleteDialogController,
+      resolve: {
+        filesToDelete: function() {
+          return toDelete;
+        }
       }
     });
+
+    modalInstance.result.then(
+      function(result) {
+        if ('delete' != result) return
+
+        var Files = $resource('/webapp/filesss/:abspath')
+
+        var toDelete = getFiles(cluster).slice(0)
+        angular.forEach(toDelete, function(file, idx) {
+          if (file.selected) {
+            Files.delete({
+              abspath: file.abspath
+            }, function(hal) {
+              var filesInCluster = getFiles(cluster)
+              var idx = filesInCluster.indexOf(file)
+              if (idx >=0) {
+                filesInCluster.splice(idx, 1)
+              }
+              else {
+                notifications.warning('Not found in files array:  '+file.abspath, 3000)
+              }
+
+            }, function(err) {
+                notifications.danger('Server error deleting '+file.abspath, 3000)
+            })
+          }
+        });
+      },
+      function() {
+        $log.info('Modal dismissed at: ' + new Date());
+      }
+    );
   }
 
   $scope.selectAll = function(cluster) {
@@ -123,10 +167,11 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
     }
   }
 
+
   $scope.open = function(cluster) {
     var modalInstance = $modal.open({
-      templateUrl: 'myModalContent.html',
-      controller: ModalInstanceCtrl,
+      templateUrl: 'preview.html',
+      controller: PreviewModalController,
       //size: 'lg',
       resolve: {
         files: function() {
@@ -135,27 +180,23 @@ function AccordionDemoCtrl($scope, $resource, $modal, $log) {
       }
     });
 
-    modalInstance.result.then(function(selectedItem) {
-      $scope.selected = selectedItem;
-    }, function() {
-      $log.info('Modal dismissed at: ' + new Date());
-    });
+    modalInstance.result.then(
+      function(selectedItem) {
+        $scope.selected = selectedItem;
+      },
+      function() {
+          $log.info('Modal dismissed at: ' + new Date());
+      });
   };
-};
+});
 
 // Please note that $modalInstance represents a modal window (instance) dependency.
 // It is not the same as the $modal service used above.
-
-var ModalInstanceCtrl = function($scope, $modalInstance, files) {
-
+var PreviewModalController = function($scope, $modalInstance, files) {
   $scope.getThumb = function(file) {
     return file['_links']['thumb']['href']
   }
   $scope.files = files;
-  //$scope.items = items;
-  //$scope.selected = {
-  //  item: $scope.items[0]
-  //};
 
   $scope.ok = function() {
     //$modalInstance.close($scope.selected.item);
@@ -167,6 +208,23 @@ var ModalInstanceCtrl = function($scope, $modalInstance, files) {
   };
 };
 
+
+var ConfirmDeleteDialogController = function($scope, $modalInstance, filesToDelete) {
+  $scope.filesToDelete = filesToDelete
+
+  $scope.confirm = function() {
+    $modalInstance.close('delete')
+  }
+
+  $scope.cancel = function() {
+    $modalInstance.dismiss('cancel')
+  }
+}
+
+
+
+
+
 /********************************* private functions ********************************/
   function getFiles(cluster) {
     return cluster['_embedded']['files']
@@ -174,6 +232,32 @@ var ModalInstanceCtrl = function($scope, $modalInstance, files) {
 /********************************* private functions ********************************/
 
 
+
+app.factory('notifications', function($timeout) {
+  var queue = []
+  var add = function(msg, type, timeout) {
+    var item = {type: type, message: msg}
+    queue.push(item)
+    if (timeout) {
+      $timeout(function() {
+        var idx = queue.indexOf(item)
+        if (idx >= 0) {
+            queue.splice(idx, 1)
+        }
+      }, timeout)
+    }
+  }
+
+  var notifications = {
+    queue: queue,
+    add: add,
+    danger: function(msg, timeout) { add(msg, 'danger', timeout) },
+    success: function(msg, timeout) { add(msg, 'success', timeout) },
+    warning: function(msg, timeout) { add(msg, 'warning', timeout) },
+    info: function(msg, timeout) { add(msg, 'info', timeout) }
+  }
+  return notifications
+})
 
 app.directive('dupCheckbox', function () {
   return {
@@ -215,4 +299,65 @@ app.directive('dupCheckbox', function () {
       });
     }
   };
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+  <body ng-controller="MainCtrl">
+     <script type="text/ng-template" id="templateId.html">
+       <img src='http://db3.stb.s-msn.com/i/20/1FDB35FC17BD886FAC93E2E2FA6FDC.jpg' class="img-responsive">
+      This is the content of the template
+    </script>
+     <a href="#" mypopover   title="title">Click here</a>
+  </body>
+**/
+
+
+
+
+app.directive('mypopover', function ($compile,$templateCache) {
+
+var getTemplate = function (contentType) {
+    var template = '';
+    switch (contentType) {
+        case 'user':
+            template = $templateCache.get("templateId.html");
+            break;
+    }
+    return template;
+}
+return {
+    restrict: "A",
+    link: function (scope, element, attrs) {
+        var popOverContent;
+
+        popOverContent = getTemplate("user");
+
+        var options = {
+            content: popOverContent,
+            placement: "bottom",
+            html: true,
+            date: scope.date
+        };
+        $(element).popover(options);
+    }
+};
 });

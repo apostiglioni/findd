@@ -3,33 +3,37 @@
 <head>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular.js"></script>
     <script src="//code.angularjs.org/1.2.10/angular-resource.min.js"></script>
-    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular-animate.js"></script>
     <script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-0.11.0.js"></script>
-    <script src="/webapp/lib/angular-bootstrap-checkbox.js"></script>
     <script src="/webapp/main.js"></script>
+    <script src="/webapp/lib/message-center.js"></script>
 
-    <script src="//code.jquery.com/jquery-2.1.1.min.js"></script>
-    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
-
-    <link href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet">
+    <link href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet"/>
     <link rel="stylesheet" href="/webapp/styles/main.css"/>
 </head>
 <body>
-<div ng-controller="AccordionDemoCtrl">
-    <script type="text/ng-template" id="myModalContent.html">
-        <div class="modal-header"><h3 class="modal-title"></h3></div>
-        <div class="modal-body"></div>
-        <carousel interval="1000">
-            <slide ng-repeat="file in files" active="slide.active">
-                <img ng-src="{{getThumb(file)}}" style="margin:auto;" class="img-responsive">
+<div class="notifications-panel" ng-controller="AlertsController">
+    <div ng-repeat="alert in alerts">
+        <alert class="pull-right" style="max-width:300px;" type="{{alert.type}}">{{alert.message}}</alert>
+    </div>
+</div>
+<div ng-controller="ClustersController">
+    <script type="text/ng-template" id="preview.html">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
+            </h3>
+        </div>
+        <div class="modal-body">
+            <carousel interval="1000">
+                <slide ng-repeat="file in files" active="slide.active">
+                    <img ng-src="{{getThumb(file)}}" style="margin:auto;" class="img-responsive">
 
-                <div class="carousel-caption">
-                    <h4>Slide {{$index}}</h4>
-
-                    <p>{{file.fullname}}</p>
-                </div>
-            </slide>
-        </carousel>
+                    <div class="carousel-caption">
+                        <h4>Slide {{$index}}</h4>
+                        <p>{{file.fullname}}</p>
+                    </div>
+                </slide>
+            </carousel>
         </div>
         <div class="modal-footer">
             <button class="btn btn-primary" ng-click="ok()">OK</button>
@@ -37,62 +41,86 @@
         </div>
     </script>
 
+    <script type="text/ng-template" id="confirmDeleteDialog.html">
+        <div class="modal-header dialog-header-error">
+            <h4 class="modal-title">
+                <span class="glyphicon glyphicon-warning-sign">&nbsp;</span>
+                Do you want to delete the following files?
+            </h4>
+        </div>
+        <div class="modal-body">
+            <ul class="list-group">
+                <li class="list-group-item" ng-repeat="file in filesToDelete">{{file.abspath}}</li>
+            </ul>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger" ng-click="confirm()">
+                <span class="glyphicon glyphicon-trash"></span>
+                Delete
+            </button>
+            <button class="btn btn-primary" ng-click="cancel()">Cancel</button>
+        </div>
+    </script>
+
     <p>
         <button class="btn btn-default btn-sm" ng-click="getElements()">Get element</button>
     </p>
-
-    <checkbox ng-model="oneAtATime"></checkbox>
-    Open only one at a time
 
 
     <accordion close-others="oneAtATime">
         <accordion-group ng-repeat="cluster in clusters">
             <accordion-heading>
-                <span>{{cluster.hash}}</span><span>{{cluster.size}}</span><span
-                    class="pull-right">{{cluster.count}}</span>
+                <span class="text-info">{{cluster.hash}}</span>
+                <span class="text-muted">/</span>
+                <span class="text-primary">{{cluster.size}}</span>
+                <span class="pull-right">{{cluster.count}}</span>
             </accordion-heading>
-                <div>
-                    <div ng-repeat="file in getFiles(cluster)">
-                        <button type="button" class="btn btn-default btn-xs" ng-click="selectOthers(cluster, file)">
-                            <span class="glyphicon glyphicon-pushpin"></span>
-                        </button>
-                        {{file.selected}}
-                        <button type="button"
-                                class="btn btn-default btn-xs" ng-class="{'btn-danger': file.selected}"
-                                ng-init="file.selected=false"
-                                ng-model="file.selected"
-                                dup-checkbox dup-checkbox-validate="validateFileSelected(cluster, file)"
-                                >
-                            <span ng-style="{'width': '10px', 'left': '-1px'}"
-                                  class="glyphicon"
-                                  ng-class="{'glyphicon-ok': file.selected}">
-                            </span>
-                        </button>
-
-                        <!--
-                        <checkbox
-                            ng-model="file.selected"
-                            ng-change="toggleFileSelection(cluster, file)"
-                            danger-on-check="true">
-                        </checkbox>
-                        -->
-                        <!--<input type="checkbox" ng-checked="file.selected" ng-click="toggleFileSelection(cluster, file, $event)">-->
-                        {{file.abspath}}
-                    </div>
-                </div>
-
-                <div>
-                    <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">Show</button>
-                    <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">Delete</button>
-                </div>
-
-                <!--
-                <div class="col-xs-1">
-                    <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
-                        <span class="glyphicon glyphicon-trash"></span>
+            <div>
+                <!-- TODO: This button bar is duplicated -->
+                 <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">
+                     <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
+                 </button>
+                 <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>
+                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">
+                     <span class="glyphicon glyphicon-trash">&nbsp;</span>Delete
+                 </button>
+            </div>
+            <div style="padding-top:10px; padding-bottom: 10px;">
+                <div ng-repeat="file in getFiles(cluster)">
+                    <button type="button" class="btn btn-default btn-xs" ng-click="selectOthers(cluster, file)">
+                        <span class="glyphicon glyphicon-pushpin"></span>
                     </button>
+                    <button type="button"
+                            ng-model="file.selected"
+                            ng-init="file.selected = false"
+                            class="btn btn-default btn-xs" ng-class="{'btn-danger': file.selected}"
+                            dup-checkbox dup-checkbox-validate="validateFileSelected(cluster, file)">
+                        <span ng-style="{'width': '10px', 'left': '-1px'}"
+                              class="glyphicon"
+                              ng-class="{'glyphicon-ok': file.selected}">
+                        </span>
+                    </button>
+                    {{file.abspath}}
                 </div>
-                -->
+            </div>
+
+            <div>
+                 <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">
+                     <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
+                 </button>
+                 <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>
+                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">
+                     <span class="glyphicon glyphicon-trash">&nbsp;</span>Delete
+                 </button>
+            </div>
+
+            <!--
+            <div class="col-xs-1">
+                <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
+                    <span class="glyphicon glyphicon-trash"></span>
+                </button>
+            </div>
+            -->
         </accordion-group>
     </accordion>
 </div>
