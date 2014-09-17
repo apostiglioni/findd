@@ -35,15 +35,12 @@ class Server():
 
         ret = {
             '_links': {
-                'self': {'href': '/?page=%d' % page},
-                # TODO: show prev
-                'prev': { 'href': '/page=%d' % (page - 1) },
-                'next': { 'href': '/?page=%d' % (page + 1)}  # TODO: only show next if there are more elements
+                'self': {'href': '/clusters/duplicates?page=%d' % page}, #TODO: propagate page_size and url
             },
             '_embedded': {
                 'clusters': [
                     {
-                        '_links': {'self': {'href': '/{}/{}'.format(hash, size)}},
+                        '_links': {'self': {'href': '/clusters/{}/{}'.format(hash, size)}},  #TODO: url is hardcoded
                         '_embedded': self.get_cluster(hash, size)['_embedded'],
                         'hash': hash,
                         'size': size,
@@ -54,6 +51,10 @@ class Server():
                 ]
             }
         }
+        if page > 1:
+            ret['_links']['prev'] = { 'href': '/clusters/duplicates?page=%d' % (page - 1) } #TODO: propagate page_size and url
+        if has_next:
+            ret['_links']['next'] = { 'href': '/clusters/duplicates?page=%d' % (page + 1)} #TODO: propagate page_size and url
 
         return ret
 

@@ -15,7 +15,7 @@
         <alert class="pull-right" style="max-width:300px;" type="{{alert.type}}">{{alert.message}}</alert>
     </div>
 </div>
-<div ng-controller="ClustersController" ng-init="getElements(1)">
+<div ng-controller="ClustersController">
     <script type="text/ng-template" id="preview.html">
         <div class="modal-header">
             <h3 class="modal-title">
@@ -23,7 +23,7 @@
             </h3>
         </div>
         <div class="modal-body">
-            <carousel interval="1000">
+            <carousel interval="20000">
                 <slide ng-repeat="file in files" active="slide.active">
                     <img ng-src="{{getThumb(file)}}" style="margin:auto;" class="img-responsive">
 
@@ -60,10 +60,6 @@
             <button class="btn btn-primary" ng-click="cancel()">Cancel</button>
         </div>
     </script>
-
-    <p>
-        <button class="btn btn-default btn-sm" ng-click="getElements(1)">Reload</button>
-    </p>
 
     <accordion close-others="oneAtATime">
         <accordion-group ng-repeat="cluster in clusters">
@@ -113,6 +109,11 @@
             </div>
         </accordion-group>
     </accordion>
+<div class="panel panel-default" ng-show="hasMorePages">
+  <div class="pager-body">
+    <button class="btn btn-link btn-xs" ng-init="loadClusters()" ng-click="loadClusters()">Load more</button>
+  </div>
+</div>    
 </div>
 </body>
 </html>

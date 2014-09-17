@@ -14,17 +14,22 @@ app.factory('Files', function($resource) {
 })
 
 app.controller('ClustersController', function($scope, Duplicates, Files, $modal, $log, notifications) {
+  var currentPage = 1  //private variable, not kept in scope
   $scope.oneAtATime = true;
+  $scope.clusters = []
 
-  $scope.getElements = function(page) {
-    const PAGE_SIZE = 1
+  //TODO: Wrap this into its own controller
+  $scope.loadClusters = function() {
+    const PAGE_SIZE = 50
+
     Duplicates.get({
-      page: page,
+      page: currentPage++,
       page_size: PAGE_SIZE
     }, function(hal) {
       //TODO: Wrap the payload details into the service
       var clusters = hal._embedded.clusters
-      $scope.clusters = clusters
+      $scope.clusters = $scope.clusters.concat(clusters)
+      $scope.hasMorePages = hal['_links'].hasOwnProperty('next')
     })
   }
 
@@ -48,6 +53,7 @@ app.controller('ClustersController', function($scope, Duplicates, Files, $modal,
     }
 
     //If there's more than one unselected, then it's safe to select
+    //TODO: This could probably be done using Array.prototype.every
     var unselectedCount = 0
     var files = getFiles(cluster)
     for(i=0; i<files.length; i++) {
@@ -66,28 +72,8 @@ app.controller('ClustersController', function($scope, Duplicates, Files, $modal,
   $scope.getFiles = getFiles
   $scope.getThumb = getThumb
 
-  $scope.addElement = function() {
-    $scope.groups.push({
-      title: 'New element',
-      content: 'New content'
-    });
-  }
-
-  $scope.removeElement = function() {
-    $scope.groups.pop()
-  }
-
-  $scope.addItem = function() {
-    var newItemNo = $scope.items.length + 1;
-    $scope.items.push('Item ' + newItemNo);
-  };
-
-  $scope.status = {
-    isFirstOpen: true,
-    isFirstDisabled: false
-  };
-
   $scope.openConfirmationDialog = function(cluster) {
+    //TODO: implement this with Array.prototype.filter
     var toDelete = []
       angular.forEach(getFiles(cluster), function(file, idx) {
       if (file.selected) {
