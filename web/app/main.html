@@ -1,11 +1,10 @@
 <!doctype html>
 <html ng-app="dupfind">
 <head>
-    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular.js"></script>
-    <script src="//code.angularjs.org/1.2.10/angular-resource.min.js"></script>
-    <script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-0.11.0.js"></script>
+    <script src="/webapp/libs/angular/angular.min.js"></script>
+    <script src="/webapp/libs/angular-resource/angular-resource.min.js"></script>
+    <script src="/webapp/libs/angular-bootstrap/ui-bootstrap-tpls.js"></script>
     <script src="/webapp/main.js"></script>
-    <script src="/webapp/lib/message-center.js"></script>
 
     <link href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet"/>
     <link rel="stylesheet" href="/webapp/styles/main.css"/>
@@ -16,7 +15,7 @@
         <alert class="pull-right" style="max-width:300px;" type="{{alert.type}}">{{alert.message}}</alert>
     </div>
 </div>
-<div ng-controller="ClustersController">
+<div ng-controller="ClustersController" ng-init="getElements(1)">
     <script type="text/ng-template" id="preview.html">
         <div class="modal-header">
             <h3 class="modal-title">
@@ -63,9 +62,8 @@
     </script>
 
     <p>
-        <button class="btn btn-default btn-sm" ng-click="getElements()">Get element</button>
+        <button class="btn btn-default btn-sm" ng-click="getElements(1)">Reload</button>
     </p>
-
 
     <accordion close-others="oneAtATime">
         <accordion-group ng-repeat="cluster in clusters">
@@ -81,7 +79,7 @@
                      <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
                  </button>
                  <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>
-                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">
+                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="openConfirmationDialog(cluster)">
                      <span class="glyphicon glyphicon-trash">&nbsp;</span>Delete
                  </button>
             </div>
@@ -109,18 +107,10 @@
                      <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
                  </button>
                  <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>
-                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="deleteFromCluster(cluster)">
+                 <button type="button" class="btn btn-danger btn-xs pull-right" ng-click="openConfirmationDialog(cluster)">
                      <span class="glyphicon glyphicon-trash">&nbsp;</span>Delete
                  </button>
             </div>
-
-            <!--
-            <div class="col-xs-1">
-                <button type="button" class="btn btn-default btn-xs" ng-click="deleteFile(cluster, file, $index)">
-                    <span class="glyphicon glyphicon-trash"></span>
-                </button>
-            </div>
-            -->
         </accordion-group>
     </accordion>
 </div>

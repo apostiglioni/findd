@@ -17,6 +17,7 @@ develop-eggs
 .installed.cfg
 lib64
 __pycache__
+libs
 
 # Installer logs
 pip-log.txt
@@ -37,3 +38,5 @@ nosetests.xml
 
 # Vim temporary files
 *.swp
+
+node_modules/

@@ -5,16 +5,24 @@ app.controller('AlertsController', function($scope, notifications) {
   console.log(notifications.queue)
 })
 
-app.controller('ClustersController', function($scope, $resource, $modal, $log, notifications) {
+app.factory('Duplicates', function($resource) {
+  return $resource('/clusters/duplicates')
+})
+
+app.factory('Files', function($resource) {
+  return $resource('/webapp/files/:abspath')
+})
+
+app.controller('ClustersController', function($scope, Duplicates, Files, $modal, $log, notifications) {
   $scope.oneAtATime = true;
 
-  $scope.getElements = function() {
-    //var Duplicates = $resource('/clusters/duplicates')
-    var Duplicates = $resource('/webapp/duplicates-many.json')
+  $scope.getElements = function(page) {
+    const PAGE_SIZE = 1
     Duplicates.get({
-      page: 1,
-      page_size: 100
+      page: page,
+      page_size: PAGE_SIZE
     }, function(hal) {
+      //TODO: Wrap the payload details into the service
       var clusters = hal._embedded.clusters
       $scope.clusters = clusters
     })
@@ -25,7 +33,6 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
       file.selected = false
     })
   }
-
 
   $scope.selectOthers = function(cluster, file) {
     var files = getFiles(cluster)
@@ -57,10 +64,7 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
   }
 
   $scope.getFiles = getFiles
-
-  $scope.getThumb = function(file) {
-    return file['_links']['thumb']['href']
-  }
+  $scope.getThumb = getThumb
 
   $scope.addElement = function() {
     $scope.groups.push({
@@ -83,17 +87,7 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
     isFirstDisabled: false
   };
 
-  $scope.deleteFile = function(cluster, file, index) {
-    var files = cluster['_embedded']['files'];
-    if (files.length > 2) {
-      files.splice(index, 1);
-    } else {
-      clusterIndex = $scope.clusters.indexOf(cluster);
-      $scope.clusters.splice(clusterIndex, 1);
-    }
-  }
-
-  $scope.deleteFromCluster = function(cluster) {
+  $scope.openConfirmationDialog = function(cluster) {
     var toDelete = []
       angular.forEach(getFiles(cluster), function(file, idx) {
       if (file.selected) {
@@ -116,28 +110,7 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
       function(result) {
         if ('delete' != result) return
 
-        var Files = $resource('/webapp/filesss/:abspath')
-
-        var toDelete = getFiles(cluster).slice(0)
-        angular.forEach(toDelete, function(file, idx) {
-          if (file.selected) {
-            Files.delete({
-              abspath: file.abspath
-            }, function(hal) {
-              var filesInCluster = getFiles(cluster)
-              var idx = filesInCluster.indexOf(file)
-              if (idx >=0) {
-                filesInCluster.splice(idx, 1)
-              }
-              else {
-                notifications.warning('Not found in files array:  '+file.abspath, 3000)
-              }
-
-            }, function(err) {
-                notifications.danger('Server error deleting '+file.abspath, 3000)
-            })
-          }
-        });
+        deleteFromCluster(cluster)
       },
       function() {
         $log.info('Modal dismissed at: ' + new Date());
@@ -147,7 +120,7 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
 
   $scope.selectAll = function(cluster) {
     var selected = 0;
-    var files = cluster['_embedded']['files'];
+    var files = getFiles(cluster);
     unselected = []
     angular.forEach(files, function(file, index) {
        if(file.selected) {
@@ -193,9 +166,8 @@ app.controller('ClustersController', function($scope, $resource, $modal, $log, n
 // Please note that $modalInstance represents a modal window (instance) dependency.
 // It is not the same as the $modal service used above.
 var PreviewModalController = function($scope, $modalInstance, files) {
-  $scope.getThumb = function(file) {
-    return file['_links']['thumb']['href']
-  }
+  $scope.getThumb = getThumb
+
   $scope.files = files;
 
   $scope.ok = function() {
@@ -229,9 +201,36 @@ var ConfirmDeleteDialogController = function($scope, $modalInstance, filesToDele
   function getFiles(cluster) {
     return cluster['_embedded']['files']
   }
+
+  function getThumb(file) {
+    return file['_links']['thumb']['href']
+  }
+
+  function deleteFromCluster(cluster) {
+    var toDelete = getFiles(cluster).slice(0)
+    angular.forEach(toDelete, function(file, idx) {
+      if (file.selected) {
+        Files.delete({
+          abspath: file.abspath
+        }, 
+        function(hal) {
+          var filesInCluster = getFiles(cluster)
+          var idx = filesInCluster.indexOf(file)
+          if (idx >=0) {
+            filesInCluster.splice(idx, 1)
+          }
+          else {
+            notifications.warning('Not found in files array:  '+file.abspath, 3000)
+          }
+        }, 
+        function(err) {
+          notifications.danger('Server error deleting '+file.abspath, 3000)
+        })
+      }
+    });
+
+  }
 /********************************* private functions ********************************/
-
-
 
 app.factory('notifications', function($timeout) {
   var queue = []
