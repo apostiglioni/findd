@@ -5,42 +5,44 @@ app.factory('halParser', function($resource) {
   function parseElement(element) {
       var ret
       if (Array.isArray(element)) {
-        ret = element.map(function(e) { return halParser(e, $resource) })
+        ret = element.map(function(e) { return parse(e, $resource) })
       }
       else {
-        ret = halParser(element)
+        ret = parse(element)
       }
 
       return ret
   }
 
-  return {
-    parse: function(hal) {
-      var resource = angular.copy(hal)
-      delete resource._embedded
-      delete resource._links
+  function parse(hal) {
+    var resource = angular.copy(hal)
+    delete resource._embedded
+    delete resource._links
 
-      var embedded = hal._embedded || {}
-      for (var key in embedded) {
-        resource[key] = halElementParser(embedded[key], $resource)
-      }
-
-      var links = hal._links || {}
-      resource.link = function(name, parameters) {
-        return links[name].href //TODO: support parameters for templated links
-      }
-
-      //Create nested resource
-      if (links.hasOwnProperty('self')) {
-        var actions = ['get', 'save', 'query', 'remove', 'delete']
-        var $r = $resource(resource.link('self'))
-        actions.forEach(function(action) {
-          resource['$' + action] = $r[action]
-        })
-      }
-
-      return resource
+    var embedded = hal._embedded || {}
+    for (var key in embedded) {
+      resource[key] = parseElement(embedded[key], $resource)
     }
+
+    var links = hal._links || {}
+    resource.link = function(name, parameters) {
+      return links[name].href //TODO: support parameters for templated links
+    }
+
+    //Create nested resource
+    if (links.hasOwnProperty('self')) {
+      var actions = ['get', 'save', 'query', 'remove', 'delete']
+      var $r = $resource(resource.link('self'))
+      actions.forEach(function(action) {
+        resource['$' + action] = $r[action]
+      })
+    }
+
+    return resource
+  }
+
+  return {
+    parse: parse
   }
 })
 
@@ -49,7 +51,7 @@ app.controller('AlertsController', function($scope, notifications) {
   $scope.alerts = notifications.queue
 })
 
-app.factory('Clusters', function(halParser, $respource) {
+app.factory('Clusters', function(halParser, $resource) {
   var resource = $resource(
     '/clusters/:verb', {},
     {
