@@ -71,7 +71,7 @@
             </accordion-heading>
             <div>
                 <!-- TODO: This button bar is duplicated -->
-                 <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">
+                 <button type="button" class="btn btn-default btn-xs" ng-click="preview(cluster)">
                      <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
                  </button>
                  <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>
@@ -80,7 +80,7 @@
                  </button>
             </div>
             <div style="padding-top:10px; padding-bottom: 10px;">
-                <div ng-repeat="file in getFiles(cluster)">
+                <div ng-repeat="file in cluster.files">
                     <button type="button" class="btn btn-default btn-xs" ng-click="selectOthers(cluster, file)">
                         <span class="glyphicon glyphicon-pushpin"></span>
                     </button>
@@ -99,7 +99,7 @@
             </div>
 
             <div>
-                 <button type="button" class="btn btn-default btn-xs" ng-click="open(cluster)">
+                 <button type="button" class="btn btn-default btn-xs" ng-click="preview(cluster)">
                      <span class="glyphicon glyphicon-eye-open">&nbsp;</span>Preview
                  </button>
                  <button type="button" class="btn btn-default btn-xs" ng-click="clearSelection(cluster)">Clear</button>

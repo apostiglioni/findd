@@ -1,44 +1,55 @@
 var app = angular.module('dupfind', ['ui.bootstrap', 'ngResource'])
 
-app.controller('AlertsController', function($scope, notifications) {
-  $scope.alerts = notifications.queue
-  console.log(notifications.queue)
+app.factory('halParser', function($resource) {
+  //private functions
+  function parseElement(element) {
+      var ret
+      if (Array.isArray(element)) {
+        ret = element.map(function(e) { return halParser(e, $resource) })
+      }
+      else {
+        ret = halParser(element)
+      }
+
+      return ret
+  }
+
+  return {
+    parse: function(hal) {
+      var resource = angular.copy(hal)
+      delete resource._embedded
+      delete resource._links
+
+      var embedded = hal._embedded || {}
+      for (var key in embedded) {
+        resource[key] = halElementParser(embedded[key], $resource)
+      }
+
+      var links = hal._links || {}
+      resource.link = function(name, parameters) {
+        return links[name].href //TODO: support parameters for templated links
+      }
+
+      //Create nested resource
+      if (links.hasOwnProperty('self')) {
+        var actions = ['get', 'save', 'query', 'remove', 'delete']
+        var $r = $resource(resource.link('self'))
+        actions.forEach(function(action) {
+          resource['$' + action] = $r[action]
+        })
+      }
+
+      return resource
+    }
+  }
 })
 
-function halElementParser(element, $resource) {
-    return Array.isArray(element) ? 
-      element.map(function(e) { halParser(e, $resource) }):
-      halParser(element, $resource)
-}
 
-function halParser(hal, $resource) {
-  var resource = angular.copy(hal)
-  delete resource._embedded
-  delete resource._links
+app.controller('AlertsController', function($scope, notifications) {
+  $scope.alerts = notifications.queue
+})
 
-  var embedded = hal._embedded || {}
-  for (var key in embedded) {
-    resource[key] = halElementParser(embedded[key], $resource)
-  }
-
-  var links = hal._links || {}
-  resource.link = function(name, parameters) {
-    return links[name].href //TODO: support parameters for templated links
-  }
-
-  //Create nested resource
-  if (links.hasOwnProperty('self')) {
-    var actions = ['get', 'save', 'query', 'remove', 'delete']
-    var $r = $resource(resource.link('self'))
-    actions.forEach(function(action) {
-      resource['$' + action] = $r[action]
-    })
-  }
-
-  return resource
-}
-
-app.factory('Clusters', function($resource) {
+app.factory('Clusters', function(halParser, $respource) {
   var resource = $resource(
     '/clusters/:verb', {},
     {
@@ -46,14 +57,14 @@ app.factory('Clusters', function($resource) {
         method: 'GET', 
         params: {verb: 'duplicates'},
         transformResponse: function(json, headers) {
-          data = angular.fromJson(json)
+          var data = angular.fromJson(json)
           //TODO: page could probably be a first class citizen object
-          page = {
+          var page = {
             //$rawHalResponse: json  //no need to save the raw json yet
-            data: data._embedded.clusters,
-            parsed: halParser(data, $resource),
+            data: halParser.parse(data).clusters,
             hasNext: data._links.hasOwnProperty('next')
           }
+
           return page;
         }
       }
@@ -89,14 +100,13 @@ app.controller('ClustersController', function($scope, Clusters, Files, $modal, $
   }
 
   $scope.clearSelection = function(cluster) {
-    angular.forEach(getFiles(cluster), function(file, idx) {
+    angular.forEach(cluster.files, function(file, idx) {
       file.selected = false
     })
   }
 
   $scope.selectOthers = function(cluster, file) {
-    var files = getFiles(cluster)
-    angular.forEach(files, function(f, idx) {
+    angular.forEach(cluster.files, function(f, idx) {
       f.selected = f != file
     })
   }
@@ -110,7 +120,7 @@ app.controller('ClustersController', function($scope, Clusters, Files, $modal, $
     //If there's more than one unselected, then it's safe to select
     //TODO: This could probably be done using Array.prototype.every
     var unselectedCount = 0
-    var files = getFiles(cluster)
+    var files = cluster.files
     for(i=0; i<files.length; i++) {
       if (!files[i].selected) {
         unselectedCount++
@@ -124,13 +134,12 @@ app.controller('ClustersController', function($scope, Clusters, Files, $modal, $
     return false
   }
 
-  $scope.getFiles = getFiles
   $scope.getThumb = getThumb
 
   $scope.openConfirmationDialog = function(cluster) {
     //TODO: implement this with Array.prototype.filter
     var toDelete = []
-      angular.forEach(getFiles(cluster), function(file, idx) {
+      angular.forEach(cluster.files, function(file, idx) {
       if (file.selected) {
         toDelete.push(file)
       }
@@ -161,7 +170,7 @@ app.controller('ClustersController', function($scope, Clusters, Files, $modal, $
 
   $scope.selectAll = function(cluster) {
     var selected = 0;
-    var files = getFiles(cluster);
+    var files = cluster.files
     unselected = []
     angular.forEach(files, function(file, index) {
        if(file.selected) {
@@ -182,14 +191,14 @@ app.controller('ClustersController', function($scope, Clusters, Files, $modal, $
   }
 
 
-  $scope.open = function(cluster) {
+  $scope.preview = function(cluster) {
     var modalInstance = $modal.open({
       templateUrl: 'preview.html',
       controller: PreviewModalController,
       //size: 'lg',
       resolve: {
         files: function() {
-          return getFiles(cluster);
+          return cluster.files
         }
       }
     });
@@ -239,23 +248,19 @@ var ConfirmDeleteDialogController = function($scope, $modalInstance, filesToDele
 
 
 /********************************* private functions ********************************/
-  function getFiles(cluster) {
-    return cluster['_embedded']['files']
-  }
-
   function getThumb(file) {
-    return file['_links']['thumb']['href']
+    return file.link('thumb')
   }
 
   function deleteFromCluster(cluster) {
-    var toDelete = getFiles(cluster).slice(0)
+    var toDelete = cluster.files.slice(0)
     angular.forEach(toDelete, function(file, idx) {
       if (file.selected) {
         Files.delete({
           abspath: file.abspath
         }, 
         function(hal) {
-          var filesInCluster = getFiles(cluster)
+          var filesInCluster = cluster.files
           var idx = filesInCluster.indexOf(file)
           if (idx >=0) {
             filesInCluster.splice(idx, 1)

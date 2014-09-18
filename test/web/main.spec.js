@@ -50,9 +50,19 @@ describe('Unit: ClustersController', function() {
 
   it('should only delete the files marked as selected', function () {
     $httpBackend.expectGET('/clusters/duplicates?page=1&page_size=50').respond(200, getJSONFixture('duplicates.fixture.json'))
+    
     var controller = createController()
     $scope.loadClusters()
     $httpBackend.flush()
-    console.log($scope.clusters)
+    
+    expect($scope.clusters.length).toBeGreaterThan(0)
+
+    $scope.clusters.forEach(function(cluster) {
+      cluster.files.forEach(function(file) {
+        if (file.selected) {
+          $httpBackend.expectDELETE(file.self)
+        }
+      })
+    })
   });
 })
