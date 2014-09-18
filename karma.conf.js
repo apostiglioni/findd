@@ -8,8 +8,15 @@ module.exports = function(config){
 
     files : [
       'web/app/libs/angular/angular.js',
+      'web/app/libs/angular-resource/angular-resource.js',
+      'web/app/libs/angular-bootstrap/ui-bootstrap-tpls.min.js',
+      'web/app/main.js',
+
       'web/app/libs/angular-mocks/angular-mocks.js',
-      'web/app/main.js'
+      'web/app/libs/jquery/dist/jquery.js',
+      'web/app/libs/jasmine-jquery/lib/jasmine-jquery.js',
+      'test/web/main.spec.js',
+      {pattern: 'test/web/*.fixture.json', watched: true, served: true, included: false}
     ],
 
     autoWatch : true,

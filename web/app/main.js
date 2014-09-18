@@ -5,15 +5,72 @@ app.controller('AlertsController', function($scope, notifications) {
   console.log(notifications.queue)
 })
 
-app.factory('Duplicates', function($resource) {
-  return $resource('/clusters/duplicates')
+function halElementParser(element, $resource) {
+    return Array.isArray(element) ? 
+      element.map(function(e) { halParser(e, $resource) }):
+      halParser(element, $resource)
+}
+
+function halParser(hal, $resource) {
+  var resource = angular.copy(hal)
+  delete resource._embedded
+  delete resource._links
+
+  var embedded = hal._embedded || {}
+  for (var key in embedded) {
+    resource[key] = halElementParser(embedded[key], $resource)
+  }
+
+  var links = hal._links || {}
+  resource.link = function(name, parameters) {
+    return links[name].href //TODO: support parameters for templated links
+  }
+
+  //Create nested resource
+  if (links.hasOwnProperty('self')) {
+    var actions = ['get', 'save', 'query', 'remove', 'delete']
+    var $r = $resource(resource.link('self'))
+    actions.forEach(function(action) {
+      resource['$' + action] = $r[action]
+    })
+  }
+
+  return resource
+}
+
+app.factory('Clusters', function($resource) {
+  var resource = $resource(
+    '/clusters/:verb', {},
+    {
+      getDuplicates: {
+        method: 'GET', 
+        params: {verb: 'duplicates'},
+        transformResponse: function(json, headers) {
+          data = angular.fromJson(json)
+          //TODO: page could probably be a first class citizen object
+          page = {
+            //$rawHalResponse: json  //no need to save the raw json yet
+            data: data._embedded.clusters,
+            parsed: halParser(data, $resource),
+            hasNext: data._links.hasOwnProperty('next')
+          }
+          return page;
+        }
+      }
+    }
+  )
+  return {
+    getDuplicates: function(params) {
+      return resource.getDuplicates(params).$promise
+    }
+  }
 })
 
 app.factory('Files', function($resource) {
   return $resource('/webapp/files/:abspath')
 })
 
-app.controller('ClustersController', function($scope, Duplicates, Files, $modal, $log, notifications) {
+app.controller('ClustersController', function($scope, Clusters, Files, $modal, $log, notifications) {
   var currentPage = 1  //private variable, not kept in scope
   $scope.oneAtATime = true;
   $scope.clusters = []
@@ -22,14 +79,12 @@ app.controller('ClustersController', function($scope, Duplicates, Files, $modal,
   $scope.loadClusters = function() {
     const PAGE_SIZE = 50
 
-    Duplicates.get({
+    Clusters.getDuplicates({
       page: currentPage++,
       page_size: PAGE_SIZE
-    }, function(hal) {
-      //TODO: Wrap the payload details into the service
-      var clusters = hal._embedded.clusters
-      $scope.clusters = $scope.clusters.concat(clusters)
-      $scope.hasMorePages = hal['_links'].hasOwnProperty('next')
+    }).then(function(page) {
+      $scope.clusters = $scope.clusters.concat(page.data)
+      $scope.hasMorePages = page.hasNext
     })
   }
 
